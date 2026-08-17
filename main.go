@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -111,7 +112,32 @@ type InspectArgs struct {
 }
 
 func handleInspectContext(ctx context.Context, req *mcp.CallToolRequest, args InspectArgs) (*mcp.CallToolResult, any, error) {
-	return fail("inspect_context: not yet implemented")
+	st, err := loadState()
+	if err != nil {
+		return fail("inspect_context: %v", err)
+	}
+	if !phaseAllowed(st.Phase, "inspect_context") {
+		return fail("inspect_context: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
+	}
+
+	mode := args.Mode
+	if mode == "" {
+		mode = "skeleton"
+	}
+
+	result, err := inspectFile(args.Path, mode, args.LineRange)
+	if err != nil {
+		return fail("inspect_context: %v", err)
+	}
+
+	return ok(map[string]any{
+		"language":          result.Language,
+		"total_lines":       result.TotalLines,
+		"token_reduced_from": result.TokenReducedFrom,
+		"token_reduced_to":   result.TokenReducedTo,
+		"content":           result.Content,
+		"truncated":         result.Truncated,
+	})
 }
 
 type ApplyPatchArgs struct {
@@ -145,7 +171,66 @@ type CheckpointArgs struct {
 }
 
 func handleCheckpoint(ctx context.Context, req *mcp.CallToolRequest, args CheckpointArgs) (*mcp.CallToolResult, any, error) {
-	return fail("checkpoint: not yet implemented")
+	st, err := loadState()
+	if err != nil {
+		return fail("checkpoint: %v", err)
+	}
+
+	if !phaseAllowed(st.Phase, "checkpoint") {
+		return fail("checkpoint: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
+	}
+
+	// determine next phase
+	nextPhase := args.NextPhase
+	if nextPhase == "" {
+		// default: stay in same phase
+		nextPhase = st.Phase
+	}
+
+	// validate phase transition
+	validTransitions := map[string][]string{
+		"INIT":      {"PLANNING"},
+		"PLANNING":  {"EXECUTING", "PLANNING"},
+		"EXECUTING": {"VERIFYING", "EXECUTING"},
+		"VERIFYING": {"COMPLETED", "EXECUTING"},
+		"PAUSED":    {"PLANNING", "EXECUTING"},
+		"COMPLETED": {},
+	}
+	allowed, found := validTransitions[st.Phase]
+	if !found {
+		return fail("checkpoint: unknown current phase %q", st.Phase)
+	}
+	valid := false
+	for _, t := range allowed {
+		if t == nextPhase {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		return fail("checkpoint: cannot transition from %s to %s (allowed: %v)", st.Phase, nextPhase, allowed)
+	}
+
+	// build checkpoint entry
+	cp := Checkpoint{
+		ID:        nextCheckpointID(),
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Summary:   args.Summary,
+	}
+	st.Checkpoints = append(st.Checkpoints, cp)
+	st.Phase = nextPhase
+	st.AllowedActions = phaseActions[nextPhase]
+	st.ActiveGoal = args.Summary
+
+	if err := saveState(st); err != nil {
+		return fail("checkpoint: save state: %v", err)
+	}
+
+	return ok(map[string]any{
+		"success":       true,
+		"checkpoint_id": cp.ID,
+		"phase":         st.Phase,
+	})
 }
 
 // ── helpers ──

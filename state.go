@@ -44,7 +44,7 @@ type Checkpoint struct {
 // ── Phase Gate ──
 
 var phaseActions = map[string][]string{
-	"INIT":      {"get_status"},
+	"INIT":      {"checkpoint", "get_status"},
 	"PLANNING":  {"inspect_context", "checkpoint", "get_status"},
 	"EXECUTING": {"inspect_context", "apply_patch", "checkpoint", "get_status"},
 	"VERIFYING": {"inspect_context", "get_status"},
