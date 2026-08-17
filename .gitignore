@@ -1,0 +1,14 @@
+# Binary
+statemachine-mcp
+reducer-mcp
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# State (auto-generated)
+.opencode/
