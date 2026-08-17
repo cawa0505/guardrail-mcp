@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -68,7 +69,54 @@ func stateDir() (string, error) {
 		return "", err
 	}
 	dir := filepath.Join(cwd, ".opencode")
-	return dir, os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	// ensure .opencode/ is gitignored
+	if err := ensureGitignore(cwd); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+// ensureGitignore appends .opencode/ to .gitignore if not already present.
+func ensureGitignore(cwd string) error {
+	gp := filepath.Join(cwd, ".gitignore")
+	data, err := os.ReadFile(gp)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		// .gitignore doesn't exist yet — create one
+		return os.WriteFile(gp, []byte("# StateMachineMcp auto-generated state\n.opencode/\n"), 0644)
+	}
+	if containsGitignoreEntry(data, ".opencode/") {
+		return nil // already present
+	}
+	// append to existing .gitignore
+	f, err := os.OpenFile(gp, os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	// ensure trailing newline before appending
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		if _, err := f.WriteString("\n"); err != nil {
+			return err
+		}
+	}
+	_, err = f.WriteString("# StateMachineMcp auto-generated state\n.opencode/\n")
+	return err
+}
+
+func containsGitignoreEntry(data []byte, entry string) bool {
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == entry || line == entry+"/" {
+			return true
+		}
+	}
+	return false
 }
 
 func statePath() (string, error) {
