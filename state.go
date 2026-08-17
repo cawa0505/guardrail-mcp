@@ -14,12 +14,13 @@ import (
 // ── State Schema ──
 
 type State struct {
-	Version     string        `json:"version"`
-	Phase       string        `json:"phase"`
-	ActiveGoal  string        `json:"active_goal"`
-	AllowedActions []string   `json:"allowed_actions"`
-	StagingBuffer StagingBuf  `json:"staging_buffer"`
-	Checkpoints []Checkpoint  `json:"checkpoints"`
+	Version        string        `json:"version"`
+	Phase          string        `json:"phase"`
+	ActiveGoal     string        `json:"active_goal"`
+	AllowedActions []string      `json:"allowed_actions"`
+	StagingBuffer  StagingBuf    `json:"staging_buffer"`
+	Checkpoints    []Checkpoint  `json:"checkpoints"`
+	ASTSynced      bool          `json:"ast_synced"`
 }
 
 type StagingBuf struct {
@@ -162,12 +163,13 @@ func saveState(st *State) error {
 
 func defaultState() *State {
 	return &State{
-		Version:     "1.0.0",
-		Phase:       "INIT",
-		ActiveGoal:  "",
+		Version:        "1.0.0",
+		Phase:          "INIT",
+		ActiveGoal:     "",
 		AllowedActions: phaseActions["INIT"],
-		StagingBuffer: StagingBuf{},
-		Checkpoints: []Checkpoint{},
+		StagingBuffer:  StagingBuf{},
+		Checkpoints:    []Checkpoint{},
+		ASTSynced:      false,
 	}
 }
 

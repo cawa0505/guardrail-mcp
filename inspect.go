@@ -31,22 +31,12 @@ var langByExt = map[string]LangInfo{
 	".go":  {"go", ".go"},
 }
 
-var supportedExts = map[string]bool{
-	".rs": true, ".ts": true, ".tsx": true,
-	".js": true, ".jsx": true, ".mjs": true,
-	".py": true, ".go": true,
-}
-
 func detectLang(path string) LangInfo {
 	ext := strings.ToLower(filepath.Ext(path))
 	if info, ok := langByExt[ext]; ok {
 		return info
 	}
 	return LangInfo{Language: "unknown", Ext: ext}
-}
-
-func isSupported(ext string) bool {
-	return supportedExts[strings.ToLower(ext)]
 }
 
 // ── Inspect Result ──
@@ -208,20 +198,16 @@ func inspectFile(path, mode string, lineRange []int) (*InspectResult, error) {
 		}
 		return result, nil
 
-	default: // "skeleton"
-		if isSupported(filepath.Ext(path)) {
-			result.Content = skeletonByRegex(string(data), lang.Language)
+	default: // "skeleton" — regex-based reduction (tree-sitter via graphify-mcp's graphify_skeleton_extract)
+		cleaned := reduceText(string(data))
+		cleanedLines := strings.Split(cleaned, "\n")
+		if len(cleanedLines) > maxSkeletonLines {
+			skeleton := strings.Join(cleanedLines[:maxSkeletonLines], "\n")
+			skeleton += fmt.Sprintf("\n// ... skeleton truncated: %d reduced lines, showing first %d", len(cleanedLines), maxSkeletonLines)
+			result.Content = skeleton
+			result.Truncated = true
 		} else {
-			cleaned := reduceText(string(data))
-			cleanedLines := strings.Split(cleaned, "\n")
-			if len(cleanedLines) > maxSkeletonLines {
-				skeleton := strings.Join(cleanedLines[:maxSkeletonLines], "\n")
-				skeleton += fmt.Sprintf("\n// ... skeleton truncated: %d reduced lines, showing first %d", len(cleanedLines), maxSkeletonLines)
-				result.Content = skeleton
-				result.Truncated = true
-			} else {
-				result.Content = cleaned
-			}
+			result.Content = cleaned
 		}
 		result.TokenReducedFrom = countTokens(string(data))
 		result.TokenReducedTo = countTokens(result.Content)

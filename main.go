@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -148,7 +149,121 @@ type ApplyPatchArgs struct {
 }
 
 func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyPatchArgs) (*mcp.CallToolResult, any, error) {
-	return fail("apply_patch: not yet implemented")
+	st, err := loadState()
+	if err != nil {
+		return fail("apply_patch: %v", err)
+	}
+	if !phaseAllowed(st.Phase, "apply_patch") {
+		return fail("apply_patch: action not allowed in phase %s", st.Phase)
+	}
+
+	// Resolve the file path
+	fullPath := args.Path
+	if !filepath.IsAbs(args.Path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fail("apply_patch: getwd: %v", err)
+		}
+		fullPath = filepath.Join(cwd, args.Path)
+	}
+
+	// Read the original file
+	original, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fail("apply_patch: read file: %v", err)
+	}
+
+	// Apply the search/replace patch
+	newContent, err := applyPatchContent(string(original), args.SearchBlock, args.ReplaceBlock)
+	if err != nil {
+		return fail("apply_patch: %v", err)
+	}
+
+	// Backup the original content for rollback
+	// We write the new content directly so the compiler sees the patched file in place
+	backup := make([]byte, len(original))
+	copy(backup, original)
+
+	if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
+		return fail("apply_patch: write file: %v", err)
+	}
+
+	// Find project root and run compiler validation
+	projectRoot := findProjectRoot(fullPath)
+	var compResult *CompResult
+	if projectRoot != "" {
+		compiler := detectCompiler(projectRoot)
+		compResult = runCompiler(compiler, projectRoot)
+	} else {
+		compResult = &CompResult{Success: true, RawOutput: "no project root found, skipping compiler validation"}
+	}
+
+	if !compResult.Success {
+		// Compiler failed — restore the original content
+		os.WriteFile(fullPath, backup, 0644)
+		st.StagingBuffer.LastCompilerResult = compResult
+		saveState(st)
+
+		return fail("apply_patch: compiler validation failed:\n%s", compResult.RawOutput)
+	}
+
+	// Compiler passed — keep the change
+	// Record the modified file in the staging buffer
+	modifiedFile := args.Path
+	relPath := args.Path
+	if filepath.IsAbs(args.Path) {
+		if cwd, err := os.Getwd(); err == nil {
+			if rel, err := filepath.Rel(cwd, args.Path); err == nil {
+				relPath = rel
+			}
+		}
+	}
+	modifiedFile = relPath
+
+	st.StagingBuffer = StagingBuf{
+		HasPendingPatch:  false,
+		TargetFile:       &modifiedFile,
+		PatchContent:     &args.ReplaceBlock,
+		LastCompilerResult: compResult,
+	}
+
+	// Add to current checkpoint's modified_files
+	if len(st.Checkpoints) > 0 {
+		cp := &st.Checkpoints[len(st.Checkpoints)-1]
+		cp.ModifiedFiles = append(cp.ModifiedFiles, modifiedFile)
+	}
+
+	// Mark AST as stale — graphify needs to catch up
+	st.ASTSynced = false
+
+	if err := saveState(st); err != nil {
+		return fail("apply_patch: save state: %v", err)
+	}
+
+	// Spawn graphify extract in background (Phase 1: full re-extract)
+	if projectRoot != "" {
+		spawnGraphifyExtract(projectRoot, modifiedFile)
+	}
+
+	return ok(map[string]any{
+		"success":             true,
+		"file":                modifiedFile,
+		"compiler":            compilerName(projectRoot),
+		"compiler_output":     compResult.RawOutput,
+		"ast_synced":          false,
+		"graphify_extract_triggered": projectRoot != "",
+	})
+}
+
+func compilerName(projectRoot string) string {
+	if projectRoot == "" {
+		return "none"
+	}
+	c := detectCompiler(projectRoot)
+	if c == nil {
+		return "none"
+	}
+	return c.Name
 }
 
 func handleGetStatus(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
@@ -162,6 +277,7 @@ func handleGetStatus(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) 
 		"allowed_actions":           st.AllowedActions,
 		"modified_files_in_session": modifiedFiles(st),
 		"last_checkpoint_id":        lastCheckpointID(st),
+		"ast_synced":                st.ASTSynced,
 	})
 }
 
