@@ -8,30 +8,20 @@ StateMachineMcp 是一個 MCP (Model Context Protocol) server，提供一套狀�
 
 - **Phase Gate 流程控管** — 定義 INIT → PLANNING → EXECUTING → VERIFYING → COMPLETED 的階段轉換，每個階段只開放對應的工具
 - **雙緩衝 + 編譯驗證** — `apply_patch` 先通過 compiler（`cargo check` / `go vet` / `tsc`）才寫入硬碟，失敗自動復原
-- **Token 節省** — `inspect_context` 透過 regex 降級鏈萃取 AST 骨架，大幅減少 LLM context 消耗
+- **Token 節省** — `inspect_context` 透過 regex 骨架萃取減少 LLM context 消耗；深度 AST 分析委託 [Graphify MCP](https://github.com/cawa0505/graphify-mcp)
 - **Checkpoint 機制** — 進度寫入 `.opencode/state.json`，支援斷點續接
-- **Graphify 整合** — 背景自動觸發 graphify extract，保持 AST 知識圖譜同步
+- **Graphify 整合** — 背景自動觸發 graphify extract，`get_status` 可查詢 `ast_synced` 狀態
 
-## 目前進度
+## 專案文件
 
-| Phase | 內容 | 狀態 |
-|-------|------|------|
-| 1 | 專案 scaffold + MCP server 骨架 | ✅ 完成 |
-| 2 | `get_status` + Phase Gate 引擎 + state.json 讀寫 | ✅ 完成 |
-| 3 | `inspect_context` — 語言偵測 + Regex Cleanup fallback | ✅ 完成 |
-| 6 | `apply_patch` — Patch parser + Compiler Verify | ✅ 完成 |
-| 7 | Compiler Verify（cargo / go vet / tsc） | ✅ 完成 |
-| 8 | 成功 Apply + graphify 背景觸發 | ✅ 完成 |
-| 9 | `checkpoint` — 完整實作含 next_phase 轉移 | ✅ 完成 |
+規格與開發計畫使用 [openspec](https://github.com/cawa0505/openspec) 格式管理：
 
-### 待實作
-
-| Phase | 內容 |
-|-------|------|
-| 4-5 | Tree-sitter 原生 binding（Rust / TypeScript / Python / Go extractors） |
-| 7 | Staging Buffer 隔離目錄（`/tmp/statemachine-staging/`） |
-| 11 | Exponential Backoff + PAUSED 降級機制 |
-| 12 | Error handling polish + edge case 測試 |
+| 文件 | 路徑 |
+|------|------|
+| 規格 | `openspec/specs/` |
+| 變更提案 | `openspec/changes/init-scaffold/proposal.md` |
+| 設計 | `openspec/changes/init-scaffold/design.md` |
+| 任務 | `openspec/changes/init-scaffold/tasks.md` |
 
 ## 架構
 
@@ -46,11 +36,24 @@ StateMachineMcp 是一個 MCP (Model Context Protocol) server，提供一套狀�
 │   Phase Gate        │ ← 狀態機：INIT→PLANNING→EXECUTING→VERIFYING→COMPLETED
 └──────┬──────────────┘
        │
-       ├── inspect_context  → 語言偵測 → Regex skeleton / Tree-sitter
+       ├── inspect_context  → 語言偵測 → Regex skeleton / full_cleaned
        ├── apply_patch      → search/replace → Compiler Verify → 寫入 + Checkpoint
        ├── get_status       → 當前 Phase + 修改歷史
        └── checkpoint       → state.json + Phase 轉移
 ```
+
+## 目前進度
+
+`init-scaffold` 變更已完成：Phase Gate、inspect_context、apply_patch（含 compiler verify）、checkpoint、get_status、graphify 背景觸發、openspec 文件。
+
+### 待實作
+
+| 項目 | 說明 |
+|------|------|
+| Staging Buffer | 隔離目錄，不在原地編輯 |
+| PAUSED 降級 | 連續 3 次失敗自動暫停 |
+| Error handling 改進 | 統一錯誤格式，search_block 上下文提示 |
+| edge case 測試 | 測試覆蓋
 
 ## 快速開始
 
