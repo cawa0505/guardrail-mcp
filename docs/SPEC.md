@@ -1,10 +1,6 @@
-# StateMachineMcp — Spec v2（收斂版）
+# Symbol: StateMachineMcp
 
-> reducer-mcp 退役，合併升級為統一的 StateMachineMcp。
-> 語言：Go（沿用 reducer-mcp 的 Go 工具鏈與 MCP SDK）。
-> 資料結構與 Schema 依此文件為準，與實作語言無關。
-
----
+Phase-gated coding workflow as an MCP server. See [README.md](../README.md) for project overview.
 
 ## 1. 設計目標
 
@@ -14,8 +10,6 @@
 - **Double Buffer + Compiler Verify**：每次 apply_patch 通過語法檢查才寫入硬碟
 - **Checkpoint 機制**：Context 清空後可秒接進度
 
----
-
 ## 2. 命名與定位
 
 | 項目 | 值 |
@@ -23,7 +17,6 @@
 | MCP Server Name | `statemachine` |
 | 工具命名 | `inspect_context`, `apply_patch`, `get_status`, `checkpoint`（無前綴） |
 | 通訊協定 | stdio |
-| 專案目錄 | `ReducerMcp/` → rename 為 `StateMachineMcp/` |
 | Go module | `github.com/jimmy/statemachine-mcp` |
 
 ---
@@ -69,7 +62,7 @@
 
 ---
 
-## 4. .opencode/state.json Schema
+## 4. `.opencode/state.json` Schema
 
 ### 4.1 檔案路徑
 
@@ -176,7 +169,7 @@
 
 ## 5. 工具介面
 
-### 5.1 `inspect_context`
+### Symbol: inspect_context
 
 安全讀取檔案結構。自動透過 Tree-sitter 萃取 Function/Struct 骨架與行號，極大幅度節省 Token。
 
@@ -231,7 +224,7 @@
 }
 ```
 
-### 5.2 `apply_patch`
+### Symbol: apply_patch
 
 套用程式碼修改。不直接修改實體檔，而是先進入 Staging Buffer 並自動觸發 Compiler 驗證（`cargo check` / `tsc --noEmit` / `go vet`）。通過後才寫入硬碟並記錄狀態。
 
@@ -289,7 +282,7 @@
 }
 ```
 
-### 5.3 `get_status`
+### Symbol: get_status
 
 讓雲端大模型隨時確認當前 Phase、允許的 Action 以及變更歷史。
 
@@ -306,7 +299,7 @@
 }
 ```
 
-### 5.4 `checkpoint`
+### Symbol: checkpoint
 
 建立進度快照。將目前成功編譯的狀態與摘要寫入 `.opencode/state.json`，建立斷點憑證。
 
@@ -528,20 +521,7 @@ type SkeletonStats struct {
 
 ---
 
-## 9. 舊 reducer-mcp 退役過渡
-
-| 步驟 | 說明 |
-|------|------|
-| 1. Rename 目錄 | `ReducerMcp/` → `StateMachineMcp/` |
-| 2. 更新 go.mod | `github.com/jimmy/reducer-mcp` → `github.com/jimmy/statemachine-mcp` |
-| 3. 重新 build | `go build -o ~/.local/bin/statemachine-mcp` |
-| 4. 更新 opencode.json | `reducer` MCP entry → `statemachine` |
-| 5. 刪除舊 binary | `rm ~/.local/bin/reducer-mcp` |
-| 6. 提交 git | commit + push |
-
----
-
-## 10. 錯誤處理原則
+## 9. 錯誤處理原則
 
 | 錯誤類型 | 處理方式 |
 |---------|---------|
@@ -555,19 +535,19 @@ type SkeletonStats struct {
 
 ---
 
-## 11. 實作順序
+## 10. 實作順序
 
-| Phase | 內容 | 依賴 |
-|-------|------|------|
-| 1 | 專案 rename + go.mod 更新 + 基本骨架（main.go + MCP server scaffold） | 無 |
-| 2 | `get_status` + Phase Gate 引擎（state machine + state.json 讀寫） | Phase 1 |
-| 3 | `inspect_context` — 語言偵測 + Regex Cleanup fallback | Phase 2 |
-| 4 | `inspect_context` — Tree-sitter Rust extractor | Phase 3 |
-| 5 | `inspect_context` — Tree-sitter TypeScript/JavaScript/Python/Go extractors | Phase 4 |
-| 6 | `apply_patch` — Patch parser + Staging Buffer | Phase 2 |
-| 7 | `apply_patch` — Compiler Verify（cargo check / tsc / go vet） | Phase 6 |
-| 8 | `apply_patch` — 成功 Apply + Checkpoint 自動寫入 | Phase 7 |
-| 9 | `checkpoint` — 完整實作（含 next_phase 轉移） | Phase 2 |
-| 10 | 舊 reducer-mcp 退役（更新 opencode.json + 刪除舊 binary） | Phase 9 |
-| 11 | Exponential Backoff + PAUSED 降級機制 | Phase 8 |
-| 12 | Error handling polish + edge case 測試 | Phase 11 |
+| Phase | 內容 | 依賴 | 狀態 |
+|-------|------|------|------|
+| 1 | 專案 rename + go.mod 更新 + 基本骨架（main.go + MCP server scaffold） | 無 | ✅ 完成 |
+| 2 | `get_status` + Phase Gate 引擎（state machine + state.json 讀寫） | Phase 1 | ✅ 完成 |
+| 3 | `inspect_context` — 語言偵測 + Regex Cleanup fallback | Phase 2 | ✅ 完成 |
+| 4 | `inspect_context` — Tree-sitter Rust extractor | Phase 3 | ⏳ 待實作 |
+| 5 | `inspect_context` — Tree-sitter TypeScript/JavaScript/Python/Go extractors | Phase 4 | ⏳ 待實作 |
+| 6 | `apply_patch` — Patch parser + Staging Buffer | Phase 2 | ✅ 完成 |
+| 7 | `apply_patch` — Compiler Verify（cargo check / tsc / go vet） | Phase 6 | ✅ 完成 |
+| 8 | `apply_patch` — 成功 Apply + Checkpoint 自動寫入 | Phase 7 | ✅ 完成 |
+| 9 | `checkpoint` — 完整實作（含 next_phase 轉移） | Phase 2 | ✅ 完成 |
+| 10 | 舊 reducer-mcp 退役（更新 opencode.json + 刪除舊 binary） | Phase 9 | ⏳ 待實作 |
+| 11 | Exponential Backoff + PAUSED 降級機制 | Phase 8 | ⏳ 待實作 |
+| 12 | Error handling polish + edge case 測試 | Phase 11 | ⏳ 待實作 |
