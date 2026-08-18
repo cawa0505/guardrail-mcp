@@ -24,6 +24,7 @@ type State struct {
 }
 
 type StagingBuf struct {
+	Dir              string        `json:"dir"`
 	HasPendingPatch  bool          `json:"has_pending_patch"`
 	TargetFile       *string       `json:"target_file"`
 	PatchContent     *string       `json:"patch_content"`

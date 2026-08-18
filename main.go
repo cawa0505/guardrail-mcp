@@ -179,12 +179,20 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 		return fail("apply_patch: %v", err)
 	}
 
-	// Backup the original content for rollback
-	// We write the new content directly so the compiler sees the patched file in place
-	backup := make([]byte, len(original))
-	copy(backup, original)
+	// Set up staging directory and create crash-safe backup
+	stagingDir, err := setupStagingDir()
+	if err != nil {
+		return fail("apply_patch: %v", err)
+	}
 
+	backupPath, err := backupFile(fullPath, stagingDir)
+	if err != nil {
+		return fail("apply_patch: %v", err)
+	}
+
+	// Write the new content directly so the compiler sees the patched file in place
 	if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
+		cleanupBackup(backupPath)
 		return fail("apply_patch: write file: %v", err)
 	}
 
@@ -199,15 +207,17 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 	}
 
 	if !compResult.Success {
-		// Compiler failed — restore the original content
-		os.WriteFile(fullPath, backup, 0644)
+		// Compiler failed — restore from disk backup, not from memory
+		restoreFromBackup(backupPath, fullPath)
+		cleanupBackup(backupPath)
 		st.StagingBuffer.LastCompilerResult = compResult
 		saveState(st)
 
 		return fail("apply_patch: compiler validation failed:\n%s", compResult.RawOutput)
 	}
 
-	// Compiler passed — keep the change
+	// Compiler passed — remove the backup and keep the change
+	cleanupBackup(backupPath)
 	// Record the modified file in the staging buffer
 	modifiedFile := args.Path
 	relPath := args.Path
@@ -221,9 +231,10 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 	modifiedFile = relPath
 
 	st.StagingBuffer = StagingBuf{
-		HasPendingPatch:  false,
-		TargetFile:       &modifiedFile,
-		PatchContent:     &args.ReplaceBlock,
+		Dir:                stagingDir,
+		HasPendingPatch:    false,
+		TargetFile:         &modifiedFile,
+		PatchContent:       &args.ReplaceBlock,
 		LastCompilerResult: compResult,
 	}
 

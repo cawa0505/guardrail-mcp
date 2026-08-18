@@ -130,6 +130,60 @@ func runCompiler(compiler *Compiler, projectRoot string) *CompResult {
 	}
 }
 
+// ── Staging Buffer ──
+
+// setupStagingDir creates the staging directory.
+// Prefers $XDG_RUNTIME_DIR/statemachine-staging/, falls back to /tmp/statemachine-staging/.
+func setupStagingDir() (string, error) {
+	dir := os.Getenv("XDG_RUNTIME_DIR")
+	if dir != "" {
+		stagingDir := filepath.Join(dir, "statemachine-staging")
+		if err := os.MkdirAll(stagingDir, 0700); err == nil {
+			return stagingDir, nil
+		}
+	}
+	stagingDir := "/tmp/statemachine-staging"
+	if err := os.MkdirAll(stagingDir, 0700); err != nil {
+		return "", fmt.Errorf("setup staging dir: %w", err)
+	}
+	return stagingDir, nil
+}
+
+// backupFile copies srcPath to a flat-named .bak file under stagingDir.
+// Returns the backup path.
+func backupFile(srcPath, stagingDir string) (string, error) {
+	absPath, err := filepath.Abs(srcPath)
+	if err != nil {
+		return "", fmt.Errorf("backup: resolve path: %w", err)
+	}
+	// Flat name: replace all "/" with "_"
+	safeName := strings.ReplaceAll(absPath, "/", "_")
+	backupPath := filepath.Join(stagingDir, safeName+".bak")
+
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", fmt.Errorf("backup: read source: %w", err)
+	}
+	if err := os.WriteFile(backupPath, data, 0600); err != nil {
+		return "", fmt.Errorf("backup: write backup: %w", err)
+	}
+	return backupPath, nil
+}
+
+// restoreFromBackup copies the backup file back to targetPath.
+func restoreFromBackup(backupPath, targetPath string) error {
+	data, err := os.ReadFile(backupPath)
+	if err != nil {
+		return fmt.Errorf("restore: read backup: %w", err)
+	}
+	return os.WriteFile(targetPath, data, 0644)
+}
+
+// cleanupBackup removes the backup file. Errors are silently ignored.
+func cleanupBackup(backupPath string) {
+	os.Remove(backupPath)
+}
+
 // ── Graphify Integration ──
 
 // spawnGraphifyExtract runs `graphify extract <projectDir>` in the background.
