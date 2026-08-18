@@ -11,4 +11,4 @@
 ## 3. 清理與驗證
 
 - [x] 3.1 `go build ./...` 編譯通過
-- [ ] 3.2 commit + push
+- [x] 3.2 commit + push

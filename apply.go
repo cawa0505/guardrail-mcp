@@ -20,7 +20,17 @@ import (
 func applyPatchContent(original, search, replace string) (string, error) {
 	idx := strings.Index(original, search)
 	if idx < 0 {
-		return "", fmt.Errorf("search block not found in file")
+		// Show first few lines as context for the agent
+		lines := strings.SplitN(original, "\n", 12) // 11 lines max + indication
+		limit := len(lines)
+		if limit > 11 {
+			limit = 11
+		}
+		ctx := strings.Join(lines[:limit], "\n")
+		if len(lines) > 11 {
+			ctx += "\n..."
+		}
+		return "", fmt.Errorf("search block not found in file\n\nFile content (first lines):\n%s", ctx)
 	}
 	return original[:idx] + replace + original[idx+len(search):], nil
 }

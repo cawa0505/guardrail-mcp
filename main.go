@@ -154,7 +154,7 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 		return fail("apply_patch: %v", err)
 	}
 	if !phaseAllowed(st.Phase, "apply_patch") {
-		return fail("apply_patch: action not allowed in phase %s", st.Phase)
+		return fail("apply_patch: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
 	}
 
 	// Resolve the file path
