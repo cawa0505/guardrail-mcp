@@ -57,16 +57,6 @@ StateMachineMcp 是一個 MCP (Model Context Protocol) server，提供一套狀�
 ```bash
 # Build
 go build -o ~/.local/bin/statemachine-mcp .
-
-# 設定到 opencode.json（MCP client 設定）
-{
-  "mcpServers": {
-    "statemachine": {
-      "command": "statemachine-mcp",
-      "args": []
-    }
-  }
-}
 ```
 
 ## 工具列表
