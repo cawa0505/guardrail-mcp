@@ -20,6 +20,7 @@ type State struct {
 	AllowedActions []string      `json:"allowed_actions"`
 	StagingBuffer  StagingBuf    `json:"staging_buffer"`
 	Checkpoints    []Checkpoint  `json:"checkpoints"`
+	FailedAttempts int           `json:"failed_attempts"`
 	ASTSynced      bool          `json:"ast_synced"`
 }
 
@@ -50,7 +51,7 @@ var phaseActions = map[string][]string{
 	"PLANNING":  {"inspect_context", "checkpoint", "get_status"},
 	"EXECUTING": {"inspect_context", "apply_patch", "checkpoint", "get_status"},
 	"VERIFYING": {"inspect_context", "get_status"},
-	"PAUSED":    {"get_status"},
+	"PAUSED":    {"checkpoint", "get_status"},
 	"COMPLETED": {"get_status"},
 }
 

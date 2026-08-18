@@ -210,14 +210,26 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 		// Compiler failed — restore from disk backup, not from memory
 		restoreFromBackup(backupPath, fullPath)
 		cleanupBackup(backupPath)
-		st.StagingBuffer.LastCompilerResult = compResult
-		saveState(st)
 
-		return fail("apply_patch: compiler validation failed:\n%s", compResult.RawOutput)
+		st.FailedAttempts++
+		st.StagingBuffer.LastCompilerResult = compResult
+
+		if st.FailedAttempts >= 3 {
+			// Auto-transition to PAUSED
+			st.Phase = "PAUSED"
+			st.AllowedActions = phaseActions["PAUSED"]
+			st.FailedAttempts = 0
+			saveState(st)
+			return fail("apply_patch: compiler validation failed 3 times — auto-transitioned to PAUSED phase. Use checkpoint to resume.\n%s", compResult.RawOutput)
+		}
+
+		saveState(st)
+		return fail("apply_patch: compiler validation failed (attempt %d/3):\n%s", st.FailedAttempts, compResult.RawOutput)
 	}
 
 	// Compiler passed — remove the backup and keep the change
 	cleanupBackup(backupPath)
+	st.FailedAttempts = 0
 	// Record the modified file in the staging buffer
 	modifiedFile := args.Path
 	relPath := args.Path
