@@ -59,6 +59,19 @@ StateMachineMcp 是一個 MCP (Model Context Protocol) server，提供一套狀�
 go build -o ~/.local/bin/statemachine-mcp .
 ```
 
+### OpenCode 整合
+
+在 `opencode.json` 的 `mcp` 區塊加入：
+
+```json
+"statemachine": {
+  "command": ["{env:HOME}/.local/bin/statemachine-mcp"],
+  "description": "Workflow state machine: phase gate, inspect_context, apply_patch with compiler validation",
+  "enabled": true,
+  "type": "local"
+}
+```
+
 ## 工具列表
 
 | 工具 | 說明 |
