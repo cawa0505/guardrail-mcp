@@ -14,6 +14,7 @@ import (
 type Config struct {
 	BinaryPath string        `json:"binary_path"`
 	Timeout    time.Duration `json:"timeout_ms"`
+	Required   bool          `json:"required"`
 }
 
 // DefaultConfig returns sensible defaults.
@@ -21,6 +22,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		BinaryPath: "",
 		Timeout:    30 * time.Second,
+		Required:   false,
 	}
 }
 
@@ -46,6 +48,7 @@ func LoadConfig(stateDir string) (*Config, error) {
 	var raw struct {
 		BinaryPath string `json:"binary_path"`
 		TimeoutMs  int64  `json:"timeout_ms"`
+		Required   bool   `json:"required"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parse graphify config: %w", err)
@@ -55,6 +58,7 @@ func LoadConfig(stateDir string) (*Config, error) {
 	if raw.TimeoutMs > 0 {
 		d.Timeout = time.Duration(raw.TimeoutMs) * time.Millisecond
 	}
+	d.Required = raw.Required
 	return d, nil
 }
 
@@ -63,9 +67,11 @@ func SaveConfig(stateDir string, cfg *Config) error {
 	raw := struct {
 		BinaryPath string `json:"binary_path"`
 		TimeoutMs  int64  `json:"timeout_ms"`
+		Required   bool   `json:"required"`
 	}{
 		BinaryPath: cfg.BinaryPath,
 		TimeoutMs:  cfg.Timeout.Milliseconds(),
+		Required:   cfg.Required,
 	}
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {

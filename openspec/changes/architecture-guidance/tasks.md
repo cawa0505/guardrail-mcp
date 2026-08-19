@@ -24,7 +24,7 @@
 - [x] 3.2 定義 degraded mode 行為（Graphify binary 未配置或呼叫失敗 → 回傳錯誤，由 caller 決定是否阻擋）
 - [x] 3.3 實作 Graphify MCP client wrapper（go-sdk MCP client 呼叫 `graphify_skeleton_extract`）
 - [x] 3.4 實作逾時保護（configurable timeout 預設 30s，context deadline 優先）
-- [ ] 3.5 [待討論] degraded mode 的精確 policy 定義：哪些情境可放行、哪些必須阻擋
+- [x] 3.5 degraded mode 政策：binary 未設定→跳過 warning；設定但執行失敗→看 required flag；AST 回傳 error→拒絕
 
 ## 4. Track 2 Soft Guard — Provider Integration
 

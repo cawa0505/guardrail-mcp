@@ -19,6 +19,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Timeout != 30*time.Second {
 		t.Errorf("expected 30s timeout, got %v", cfg.Timeout)
 	}
+	if cfg.Required {
+		t.Errorf("expected Required=false by default")
+	}
 }
 
 func TestLoadConfig_NotExist(t *testing.T) {
@@ -34,7 +37,7 @@ func TestLoadConfig_NotExist(t *testing.T) {
 
 func TestLoadConfig_Valid(t *testing.T) {
 	dir := t.TempDir()
-	data := `{"binary_path":"/usr/bin/graphify","timeout_ms":5000}`
+	data := `{"binary_path":"/usr/bin/graphify","timeout_ms":5000,"required":true}`
 	if err := os.WriteFile(filepath.Join(dir, "graphify.json"), []byte(data), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -47,6 +50,9 @@ func TestLoadConfig_Valid(t *testing.T) {
 	}
 	if cfg.Timeout != 5*time.Second {
 		t.Errorf("expected 5s timeout, got %v", cfg.Timeout)
+	}
+	if !cfg.Required {
+		t.Errorf("expected Required=true")
 	}
 }
 
@@ -66,6 +72,7 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	cfg := &Config{
 		BinaryPath: "/opt/bin/graphify",
 		Timeout:    10 * time.Second,
+		Required:   true,
 	}
 	if err := SaveConfig(dir, cfg); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
@@ -79,6 +86,9 @@ func TestSaveAndLoadConfig(t *testing.T) {
 	}
 	if loaded.Timeout != 10*time.Second {
 		t.Errorf("expected 10s timeout, got %v", loaded.Timeout)
+	}
+	if !loaded.Required {
+		t.Errorf("expected Required=true")
 	}
 }
 
