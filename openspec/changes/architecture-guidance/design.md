@@ -89,5 +89,4 @@
 ## Open Questions
 
 - [待討論] Track 2 verifier 的 plugin loading 機制：是透過 MCP protocol 還是 dynamic library？
-- [待討論] Graphify degraded mode 的精確行為：哪些 policy 允許繼續、哪些必須阻擋？
 - [待討論] commit token 的過期時間與 revocation 機制？

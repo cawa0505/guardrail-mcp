@@ -8,8 +8,8 @@
 - [x] 1.6 實作過期機制（TTL-based）
 - [x] 1.7 實作 crash recovery：process crash 後 token 狀態應可復原
 - [x] 1.8 實作 token revocation（手動撤銷）
-- [ ] 1.9 [待討論] token 過期時間的預設值與可配置方式
-- [ ] 1.10 [待討論] revocation 的 UI 或 MCP tool 介面
+- [x] 1.9 token 預設 TTL 30 分鐘（`token.DefaultTTL`），目前常數夠用，未來可改 config 驅動
+- [x] 1.10 revocation 介面：`commit_token` tool 已支援 `revoke` action（`main.go:485`）
 
 ## 2. Track 1 Hard Guard — Phase Gate
 
