@@ -30,23 +30,23 @@
 
 **串接方式：** 設定檔驅動，每組 verifier 配置 URL（必要）+ API token（選用，目前暫無 auth 機制）。verifier 清單為可配置陣列。
 
-- [ ] 4.1 定義 Soft Guard verifier contract（輸入/輸出/錯誤格式）
-- [ ] 4.2 實作 verifier config 資料結構（URL、token、enabled、required、type）
-- [ ] 4.3 實作 HTTP verifier 呼叫層（POST JSON → 檢查回應）
+- [x] 4.1 定義 Soft Guard verifier contract（輸入/輸出/錯誤格式）
+- [x] 4.2 實作 verifier config 資料結構（URL、token、enabled、required、type）
+- [x] 4.3 實作 HTTP verifier 呼叫層（POST JSON → 檢查回應）
 - [ ] 4.4 實作 Docker compiler/linter verifier 串接
 - [ ] 4.5 實作 docker-llm-as-a-verifier 串接（外部專案已完成 verifier 本身，本任務僅 statemachine-mcp 端整合）
 - [ ] 4.6 實作 local llama-server verifier 串接（外部專案已完成 verifier 本身，本任務僅 statemachine-mcp 端整合）
-- [ ] 4.7 實作 verifier 配置管理（啟用/停用/required/optional）
-- [ ] 4.8 實作 required verifier 缺失時拒絕操作
-- [ ] 4.9 實作 optional verifier 跳過機制
+- [x] 4.7 實作 verifier 配置管理（啟用/停用/required/optional）
+- [x] 4.8 實作 required verifier 缺失時拒絕操作
+- [x] 4.9 實作 optional verifier 跳過機制
 - [ ] 4.10 [待討論] 未來 VL UI verifier 的整合方式與 contract
 - [ ] 4.11 [待討論] verifier loading 機制：MCP protocol vs dynamic library
 
 ## 5. 拒絕 Payload / Micro-patching
 
-- [ ] 5.1 實作 payload 驗證（拒絕不符合規範的 patch）
-- [ ] 5.2 實作 micro-patching 防護（過小或無意義的 patch 應被拒絕）
-- [ ] 5.3 [待討論] micro-patch 的具體門檻定義（行數、字元數、變更比例）
+- [x] 5.1 實作 payload 驗證（拒絕不符合規範的 patch）
+- [x] 5.2 實作 micro-patching 防護（過小或無意義的 patch 應被拒絕）
+- [x] 5.3 預設門檻：MinPatchLines=3, MinPatchChars=10
 
 ## 6. Remote Repository 改名
 
