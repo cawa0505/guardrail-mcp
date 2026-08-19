@@ -40,7 +40,7 @@ curl http://localhost:8010/health
 
 ## 3. Compare API — 核心驗證
 
-Compare 是 StateMachineMcp 最常呼叫的端點，用於比對原始程式碼與修改後程式碼的品質。
+Compare 是 GuardrailMcp 最常呼叫的端點，用於比對原始程式碼與修改後程式碼的品質。
 
 ### 3.1 預設標準
 
@@ -123,7 +123,7 @@ curl -s -X POST http://localhost:8010/v1/select \
 - `scores[0] > scores[1]` — 正確答案分數較高
 - `n_comparisons` — 執行次數（可能因 pivots 設定而不同）
 
-## 5. StateMachineMcp 整合流程
+## 5. GuardrailMcp 整合流程
 
 `mcp_apply_patch` 在 Compiler 驗證通過後、實際寫入檔案前，呼叫 verifier：
 

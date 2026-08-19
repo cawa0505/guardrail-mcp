@@ -1,17 +1,17 @@
 ## Purpose
 
-定義 StateMachineMcp 的產品命名、責任邊界、雙軌驗證行為，以及 Graphify 的 current/future 定位。確保架構文件與產品事實一致，不誇大現況。
+定義 GuardrailMcp 的產品命名、責任邊界、雙軌驗證行為，以及 Graphify 的 current/future 定位。確保架構文件與產品事實一致，不誇大現況。
 
 ## Requirements
 
 ### Requirement: 產品命名邊界
 
-對外定位為 Guardrail MCP；remote repository 名稱使用 `guardrail-mcp`；本地 Go module / binary / 目錄名稱維持 `statemachine-mcp` / `StateMachineMcp`。不在本變更進行本地改名。
+對外定位為 Guardrail MCP；remote repository 名稱使用 `guardrail-mcp`；本地 Go module / binary / 目錄名稱維持 `statemachine-mcp` / `GuardrailMcp`。不在本變更進行本地改名。
 
 #### Scenario: 文件中使用產品名稱
 
 - **WHEN** 任何文件提及產品定位
-- **THEN** 對外定位用「Guardrail MCP」描述，remote repository 用「guardrail-mcp」，本地 module/binary 維持「statemachine-mcp / StateMachineMcp」
+- **THEN** 對外定位用「Guardrail MCP」描述，remote repository 用「guardrail-mcp」，本地 module/binary 維持「statemachine-mcp / GuardrailMcp」
 
 #### Scenario: 實作語言描述
 

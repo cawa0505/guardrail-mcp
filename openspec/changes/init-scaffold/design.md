@@ -1,6 +1,6 @@
 ## Context
 
-初始變更建立 StateMachineMcp 的完整骨架。四個工具（inspect_context / apply_patch / get_status / checkpoint）透過 Phase Gate 引擎控管，state.json 作為唯一事實來源。
+初始變更建立 GuardrailMcp 的完整骨架。四個工具（inspect_context / apply_patch / get_status / checkpoint）透過 Phase Gate 引擎控管，state.json 作為唯一事實來源。
 
 ## Goals / Non-Goals
 

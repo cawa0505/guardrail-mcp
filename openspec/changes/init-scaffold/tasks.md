@@ -1,6 +1,6 @@
 # Tasks — init-scaffold
 
-> 初始變更：建立 StateMachineMcp 專案骨架與四個核心工具。
+> 初始變更：建立 GuardrailMcp 專案骨架與四個核心工具。
 
 - [x] **T1 MCP server scaffold**：main.go — 註冊 inspect_context / apply_patch / get_status / checkpoint 四個工具，stdio transport
 - [x] **T2 state.json 讀寫**：state.go — loadState / saveState / 預設狀態 / 自動 gitignore

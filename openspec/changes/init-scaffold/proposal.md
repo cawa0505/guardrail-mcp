@@ -1,6 +1,6 @@
 ## Why
 
-StateMachineMcp 是一個 Phase-gated 編碼工作流程 MCP server。初始變更建立專案骨架與四個核心工具：Phase Gate 引擎、inspect_context、apply_patch（含 compiler verify）、checkpoint。
+GuardrailMcp 是一個 Phase-gated 編碼工作流程 MCP server。初始變更建立專案骨架與四個核心工具：Phase Gate 引擎、inspect_context、apply_patch（含 compiler verify）、checkpoint。
 
 ## What Changes
 

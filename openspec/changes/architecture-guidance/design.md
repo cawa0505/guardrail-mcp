@@ -1,6 +1,6 @@
 ## Context
 
-本變更定義 StateMachineMcp 的架構層次與責任邊界。核心問題：statemachine core、Track 1 Hard Guard、Track 2 Soft Guard、Graphify 之間的關係是什麼？什麼是核心、什麼是插件、什麼是外部 provider？
+本變更定義 GuardrailMcp 的架構層次與責任邊界。核心問題：statemachine core、Track 1 Hard Guard、Track 2 Soft Guard、Graphify 之間的關係是什麼？什麼是核心、什麼是插件、什麼是外部 provider？
 
 見 `proposal.md` — Why 段落取得完整動機。
 
@@ -55,7 +55,7 @@
 
 ## Decisions
 
-- **D-0 雙命名策略**：remote repository 改名為 `guardrail-mcp`；本地 Go module、binary、目錄名稱維持 `statemachine-mcp` / `StateMachineMcp`。不在本變更改名。
+- **D-0 雙命名策略**：remote repository 改名為 `guardrail-mcp`；本地 Go module、binary、目錄名稱維持 `statemachine-mcp` / `GuardrailMcp`。不在本變更改名。
 - **D-1 Statemachine Core 不包含驗證邏輯**：core 只負責 phase/state/staging/2PC orchestration。驗證邏輯由 Track 1 / Track 2 實作，core 不內建 compiler、linter、tree-sitter 等。
 - **D-2 Track 1 Hard Guard 同步阻擋**：phase gate、policy、Graphify MCP 呼叫均在操作執行前同步完成，失敗則拒絕操作。
 - **D-3 Track 2 Soft Guard 啟用時同步阻擋**：Soft Guard verifier 可依部署環境配置啟用／停用，但啟用後的行為與 Hard Guard 相同（同步阻擋）。不允許「啟用但默默失敗」的狀態。

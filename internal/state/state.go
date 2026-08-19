@@ -157,7 +157,7 @@ func ensureGitignore(cwd string) error {
 		if !os.IsNotExist(err) {
 			return err
 		}
-		return os.WriteFile(gp, []byte("# StateMachineMcp auto-generated state\n.opencode/\n"), 0644)
+		return os.WriteFile(gp, []byte("# GuardrailMcp auto-generated state\n.opencode/\n"), 0644)
 	}
 	if containsGitignoreEntry(data, ".opencode/") {
 		return nil
@@ -172,7 +172,7 @@ func ensureGitignore(cwd string) error {
 			return err
 		}
 	}
-	_, err = f.WriteString("# StateMachineMcp auto-generated state\n.opencode/\n")
+	_, err = f.WriteString("# GuardrailMcp auto-generated state\n.opencode/\n")
 	return err
 }
 
