@@ -28,15 +28,19 @@
 
 ## 4. Track 2 Soft Guard — Provider Integration
 
+**串接方式：** 設定檔驅動，每組 verifier 配置 URL（必要）+ API token（選用，目前暫無 auth 機制）。verifier 清單為可配置陣列。
+
 - [ ] 4.1 定義 Soft Guard verifier contract（輸入/輸出/錯誤格式）
-- [ ] 4.2 實作 Docker compiler/linter verifier 串接
-- [ ] 4.3 實作 docker-llm-as-a-verifier 串接（外部專案已完成 verifier 本身，本任務僅 statemachine-mcp 端整合）
-- [ ] 4.4 實作 local llama-server verifier 串接（外部專案已完成 verifier 本身，本任務僅 statemachine-mcp 端整合）
-- [ ] 4.5 實作 verifier 配置管理（啟用/停用/required/optional）
-- [ ] 4.6 實作 required verifier 缺失時拒絕操作
-- [ ] 4.7 實作 optional verifier 跳過機制
-- [ ] 4.8 [待討論] 未來 VL UI verifier 的整合方式與 contract
-- [ ] 4.9 [待討論] verifier loading 機制：MCP protocol vs dynamic library
+- [ ] 4.2 實作 verifier config 資料結構（URL、token、enabled、required、type）
+- [ ] 4.3 實作 HTTP verifier 呼叫層（POST JSON → 檢查回應）
+- [ ] 4.4 實作 Docker compiler/linter verifier 串接
+- [ ] 4.5 實作 docker-llm-as-a-verifier 串接（外部專案已完成 verifier 本身，本任務僅 statemachine-mcp 端整合）
+- [ ] 4.6 實作 local llama-server verifier 串接（外部專案已完成 verifier 本身，本任務僅 statemachine-mcp 端整合）
+- [ ] 4.7 實作 verifier 配置管理（啟用/停用/required/optional）
+- [ ] 4.8 實作 required verifier 缺失時拒絕操作
+- [ ] 4.9 實作 optional verifier 跳過機制
+- [ ] 4.10 [待討論] 未來 VL UI verifier 的整合方式與 contract
+- [ ] 4.11 [待討論] verifier loading 機制：MCP protocol vs dynamic library
 
 ## 5. 拒絕 Payload / Micro-patching
 
