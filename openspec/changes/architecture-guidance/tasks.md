@@ -39,7 +39,7 @@
 - [x] 4.7 實作 verifier 配置管理（啟用/停用/required/optional）
 - [x] 4.8 實作 required verifier 缺失時拒絕操作
 - [x] 4.9 實作 optional verifier 跳過機制
-- [ ] 4.10 [待討論] 未來 VL UI verifier 的整合方式與 contract
+- [x] 4.10 移除 scope：VL UI verifier 不納入 guardrail-mcp 核心範圍。未來可透過 HTTP verifier contract 串接外部 VLM/cloud provider
 - [x] 4.11 verifier loading 機制：HTTP 已滿足所有需求（跨語言、可測試、生命週期簡單），無需更換
 
 ## 5. 拒絕 Payload / Micro-patching

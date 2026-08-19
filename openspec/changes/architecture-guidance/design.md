@@ -31,7 +31,7 @@
 │  · Docker compiler/linter/tests              │
 │  · docker-llm-as-a-verifier（外部專案，已實作、E2E 驗證中）│
 │  · local llama-server verifier（外部專案，已實作、E2E 驗證中）│
-│  · 未來: VL UI verifier                      │
+│  · 未來: 可選 cloud provider (透過 HTTP verifier contract)│
 └─────────────────────────────────────────────┘
 ```
 
@@ -65,7 +65,7 @@
 ## Risks / Trade-offs
 
 - **[MCP 依賴] Graphify MCP 不可用時 Hard Guard 降級**：若 Graphify MCP server 未啟動或回應逾時，AST 驗證無法執行。→ 緩解：定義 degraded mode，依 policy 決定放行或拒絕。不允許默默跳過。
-- **[Track 2 配置複雜度] 多種 verifier 組合增加部署難度**：Docker compiler + LLM verifier + VL UI verifier 的組合配置可能讓使用者困惑。→ 緩解：提供 preset 配置範本，初期先支援 Docker compiler 與 llama-server。
+- **[Track 2 配置複雜度] 多種 verifier 組合增加部署難度**：Docker compiler + LLM verifier 的組合配置可能讓使用者困惑。→ 緩解：提供 preset 配置範本，初期先支援 Docker compiler 與 llama-server。
 - **[過早抽象化] 不要現在定義 interface**：未來 Rust 重寫時可能重新設計邊界。→ 緩解：現在只用具體型別，不引入 interface abstraction。等待 Rust 實作時再評估抽象層。
 
 ## 未來 Graphify SDK Plugin 定位
