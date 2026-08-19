@@ -6,22 +6,17 @@
 
 ### Requirement: 產品命名邊界
 
-對外定位為 Guardrail MCP；remote repository 名稱使用 `guardrail-mcp`；本地 Go module / binary / 目錄名稱維持 `statemachine-mcp` / `GuardrailMcp`。不在本變更進行本地改名。
+對外定位為 Guardrail MCP；remote repository、本地 Go module、binary、目錄名稱已統一為 `guardrail-mcp` / `GuardrailMcp`。
 
 #### Scenario: 文件中使用產品名稱
 
 - **WHEN** 任何文件提及產品定位
-- **THEN** 對外定位用「Guardrail MCP」描述，remote repository 用「guardrail-mcp」，本地 module/binary 維持「statemachine-mcp / GuardrailMcp」
+- **THEN** 對外定位用「Guardrail MCP」描述，repository 用「guardrail-mcp」，本地 module/binary 用「guardrail-mcp / GuardrailMcp」
 
 #### Scenario: 實作語言描述
 
 - **WHEN** 文件中提及實作語言
 - **THEN** 核心實作語言為 Go；Rust 僅列為未來方向，不得寫成現況
-
-#### Scenario: 不將本地改名列入本變更
-
-- **WHEN** 文件中提及 repository 改名
-- **THEN** 僅描述 remote repo 改名為 guardrail-mcp；本地 Go module path、binary name、目錄名稱的改名為後續相容性變更，不在本文件變更範圍內
 
 ### Requirement: Statemachine core 責任邊界
 

@@ -186,7 +186,7 @@ func SetupStagingDir() (string, error) {
 			return stagingDir, nil
 		}
 	}
-	stagingDir := "/tmp/statemachine-staging"
+	stagingDir := "/tmp/guardrail-staging"
 	if err := os.MkdirAll(stagingDir, 0700); err != nil {
 		return "", fmt.Errorf("setup staging dir: %w", err)
 	}

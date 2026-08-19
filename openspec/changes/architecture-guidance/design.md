@@ -55,13 +55,12 @@
 
 ## Decisions
 
-- **D-0 雙命名策略**：remote repository 改名為 `guardrail-mcp`；本地 Go module、binary、目錄名稱維持 `statemachine-mcp` / `GuardrailMcp`。不在本變更改名。
 - **D-1 Statemachine Core 不包含驗證邏輯**：core 只負責 phase/state/staging/2PC orchestration。驗證邏輯由 Track 1 / Track 2 實作，core 不內建 compiler、linter、tree-sitter 等。
 - **D-2 Track 1 Hard Guard 同步阻擋**：phase gate、policy、Graphify MCP 呼叫均在操作執行前同步完成，失敗則拒絕操作。
 - **D-3 Track 2 Soft Guard 啟用時同步阻擋**：Soft Guard verifier 可依部署環境配置啟用／停用，但啟用後的行為與 Hard Guard 相同（同步阻擋）。不允許「啟用但默默失敗」的狀態。
 - **D-4 Graphify 是目前外部 MCP provider**：核心透過 MCP protocol 呼叫 Graphify MCP 做 AST/code graph 驗證。核心不直接 tree-sitter parse，不內建 Graphify client SDK。
 - **D-5 缺少 required Track 2 verifier 時依 policy 處理**：若 policy 標記某 verifier 為 required，但該 verifier 不存在或配置不完整，server 應拒絕操作並回傳明確錯誤。若 policy 允許 optional，則跳過該 verifier。不得默默略過。
-- **D-6 未來 Graphify plugin example**：獨立於核心的 Go example 專案（`examples/graphify-sdk-plugin/`），示範如何以 Go SDK 實作 Graphify provider/plugin，驗證與 statemachine-mcp 的整合契約。這是未來／獨立範例，不是目前核心內嵌能力。共用 provider contract，不把 SDK 提前耦合到現在核心。
+- **D-6 未來 Graphify plugin example**：獨立於核心的 Go example 專案（`examples/graphify-sdk-plugin/`），示範如何以 Go SDK 實作 Graphify provider/plugin，驗證與 guardrail-mcp 的整合契約。這是未來／獨立範例，不是目前核心內嵌能力。共用 provider contract，不把 SDK 提前耦合到現在核心。
 
 ## Risks / Trade-offs
 
@@ -73,7 +72,7 @@
 
 ```
 ┌─────────────────────────────────────┐
-│  statemachine-mcp（核心，Go）          │
+│  guardrail-mcp（核心，Go）               │
 │  使用 Graphify MCP protocol 呼叫     │
 └──────────────────┬──────────────────┘
                    │ MCP protocol
