@@ -40,7 +40,7 @@
 - [x] 4.8 實作 required verifier 缺失時拒絕操作
 - [x] 4.9 實作 optional verifier 跳過機制
 - [ ] 4.10 [待討論] 未來 VL UI verifier 的整合方式與 contract
-- [ ] 4.11 [待討論] verifier loading 機制：MCP protocol vs dynamic library
+- [x] 4.11 verifier loading 機制：HTTP 已滿足所有需求（跨語言、可測試、生命週期簡單），無需更換
 
 ## 5. 拒絕 Payload / Micro-patching
 

@@ -88,5 +88,6 @@
 
 ## Open Questions
 
-- [待討論] Track 2 verifier 的 plugin loading 機制：是透過 MCP protocol 還是 dynamic library？
-- [待討論] commit token 的過期時間與 revocation 機制？
+Graphify MCP 的 degraded mode 行為已定案（見 Task 3.5）。
+commit token 的預設 TTL 與 revocation 介面已實作。
+verifier loading 機制：HTTP 已滿足需求，無需更換。
