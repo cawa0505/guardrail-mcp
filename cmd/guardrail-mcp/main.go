@@ -344,51 +344,13 @@ func handleCheckpoint(ctx context.Context, req *mcp.CallToolRequest, args Checkp
 		return fail("checkpoint: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
 	}
 
-	nextPhase := args.NextPhase
-	if nextPhase == "" {
-		nextPhase = st.Phase
-	}
-
-	validTransitions := map[string][]string{
-		"INIT":      {"PLANNING"},
-		"PLANNING":  {"EXECUTING", "PLANNING"},
-		"EXECUTING": {"VERIFYING", "EXECUTING"},
-		"VERIFYING": {"COMPLETED", "EXECUTING"},
-		"PAUSED":    {"PLANNING", "EXECUTING"},
-		"COMPLETED": {},
-	}
-	allowed, found := validTransitions[st.Phase]
-	if !found {
-		return fail("checkpoint: unknown current phase %q", st.Phase)
-	}
-	valid := false
-	for _, t := range allowed {
-		if t == nextPhase {
-			valid = true
-			break
-		}
-	}
-	if !valid {
-		return fail("checkpoint: cannot transition from %s to %s (allowed: %v)", st.Phase, nextPhase, allowed)
-	}
-
-	cp := state.Checkpoint{
-		ID:        state.NextCheckpointID(),
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Summary:   args.Summary,
-	}
-	st.Checkpoints = append(st.Checkpoints, cp)
-	st.Phase = nextPhase
-	st.AllowedActions = state.PhaseActions[nextPhase]
-	st.ActiveGoal = args.Summary
-
-	if err := state.SaveState(st); err != nil {
-		return fail("checkpoint: save state: %v", err)
+	if err := state.CreateCheckpoint(st, args.Summary, args.NextPhase); err != nil {
+		return fail("checkpoint: %v", err)
 	}
 
 	return ok(map[string]any{
 		"success":       true,
-		"checkpoint_id": cp.ID,
+		"checkpoint_id": state.LastCheckpointID(st),
 		"phase":         st.Phase,
 	})
 }

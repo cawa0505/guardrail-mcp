@@ -75,6 +75,16 @@ var PhaseActions = map[string][]string{
 	"COMPLETED": {"get_status"},
 }
 
+// PhaseTransitions defines valid next phases per current phase.
+var PhaseTransitions = map[string][]string{
+	"INIT":      {"PLANNING"},
+	"PLANNING":  {"EXECUTING", "PLANNING"},
+	"EXECUTING": {"VERIFYING", "EXECUTING"},
+	"VERIFYING": {"COMPLETED", "EXECUTING"},
+	"PAUSED":    {"PLANNING", "EXECUTING"},
+	"COMPLETED": {},
+}
+
 func PhaseAllowed(phase, action string) bool {
 	for _, a := range PhaseActions[phase] {
 		if a == action {
@@ -82,6 +92,45 @@ func PhaseAllowed(phase, action string) bool {
 		}
 	}
 	return false
+}
+
+// TransitionAllowed checks if moving from current to next phase is valid.
+func TransitionAllowed(current, next string) bool {
+	allowed, ok := PhaseTransitions[current]
+	if !ok {
+		return false
+	}
+	for _, t := range allowed {
+		if t == next {
+			return true
+		}
+	}
+	return false
+}
+
+// CreateCheckpoint creates a checkpoint entry, transitions phase, and saves state.
+// nextPhase is the target phase; if empty, stays in the current phase.
+// Returns an error if the transition is invalid.
+func CreateCheckpoint(st *State, summary, nextPhase string) error {
+	if nextPhase == "" {
+		nextPhase = st.Phase
+	}
+	if !TransitionAllowed(st.Phase, nextPhase) {
+		allowed := PhaseTransitions[st.Phase]
+		return fmt.Errorf("cannot transition from %s to %s (allowed: %v)", st.Phase, nextPhase, allowed)
+	}
+
+	cp := Checkpoint{
+		ID:        NextCheckpointID(),
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Summary:   summary,
+	}
+	st.Checkpoints = append(st.Checkpoints, cp)
+	st.Phase = nextPhase
+	st.AllowedActions = PhaseActions[nextPhase]
+	st.ActiveGoal = summary
+
+	return SaveState(st)
 }
 
 // ── Load / Save ──
