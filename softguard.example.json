@@ -1,0 +1,26 @@
+{
+  "verifiers": [
+    {
+      "name": "docker-compiler",
+      "type": "compiler",
+      "url": "http://localhost:9090/verify",
+      "enabled": true,
+      "required": true
+    },
+    {
+      "name": "docker-llm",
+      "type": "llm",
+      "url": "http://localhost:9091/verify",
+      "enabled": false,
+      "required": false
+    },
+    {
+      "name": "local-llama",
+      "type": "llm",
+      "url": "http://localhost:8080/v1/chat/completions",
+      "api_token": "",
+      "enabled": false,
+      "required": false
+    }
+  ]
+}
