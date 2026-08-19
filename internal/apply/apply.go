@@ -15,6 +15,44 @@ import (
 	"github.com/cawa0505/guardrail-mcp/internal/state"
 )
 
+// ── Patch Validation (Task 5: Reject Payload) ──
+
+// Default minimum thresholds for patch content.
+const (
+	MinPatchLines = 3
+	MinPatchChars = 10
+)
+
+// ValidatePatch rejects patches that are too small or malformed.
+// A patch must contain at least MinPatchLines lines and MinPatchChars
+// characters of meaningful content (not just whitespace).
+func ValidatePatch(search, replace string) error {
+	// Search block must not be empty
+	if strings.TrimSpace(search) == "" {
+		return fmt.Errorf("patch: search block is empty")
+	}
+
+	// Total meaningful content check
+	total := strings.TrimSpace(search + replace)
+	if len(total) < MinPatchChars {
+		return fmt.Errorf("patch: too short (%d chars, minimum %d)", len(total), MinPatchChars)
+	}
+
+	// Line count check (search + replace combined)
+	lines := 0
+	if search != "" {
+		lines += strings.Count(search, "\n") + 1
+	}
+	if replace != "" {
+		lines += strings.Count(replace, "\n") + 1
+	}
+	if lines < MinPatchLines {
+		return fmt.Errorf("patch: too few lines (%d, minimum %d)", lines, MinPatchLines)
+	}
+
+	return nil
+}
+
 // ── Patch Application ──
 
 // ApplyPatchContent applies a search/replace to the file content.
@@ -143,7 +181,7 @@ func RunCompiler(compiler *Compiler, projectRoot string) *state.CompResult {
 func SetupStagingDir() (string, error) {
 	dir := os.Getenv("XDG_RUNTIME_DIR")
 	if dir != "" {
-		stagingDir := filepath.Join(dir, "statemachine-staging")
+		stagingDir := filepath.Join(dir, "guardrail-staging")
 		if err := os.MkdirAll(stagingDir, 0700); err == nil {
 			return stagingDir, nil
 		}

@@ -66,3 +66,40 @@ func TestApplyPatchContent_MultipleMatches(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+// ── Patch Validation Tests ──
+
+func TestValidatePatch_Valid(t *testing.T) {
+	err := ValidatePatch("func foo() {\n\treturn 1\n}", "func foo() {\n\treturn 2\n}")
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+func TestValidatePatch_EmptySearch(t *testing.T) {
+	err := ValidatePatch("", "replacement")
+	if err == nil {
+		t.Fatal("expected error for empty search, got nil")
+	}
+}
+
+func TestValidatePatch_TooShort(t *testing.T) {
+	err := ValidatePatch("a", "b")
+	if err == nil {
+		t.Fatal("expected error for short patch, got nil")
+	}
+}
+
+func TestValidatePatch_TooFewLines(t *testing.T) {
+	err := ValidatePatch("short", "shorter")
+	if err == nil {
+		t.Fatal("expected error for single-line patch, got nil")
+	}
+}
+
+func TestValidatePatch_WhitespaceOnly(t *testing.T) {
+	err := ValidatePatch("   \n  \n  ", "  \n  \n  ")
+	if err == nil {
+		t.Fatal("expected error for whitespace-only patch, got nil")
+	}
+}
