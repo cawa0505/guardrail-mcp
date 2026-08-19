@@ -1,4 +1,4 @@
-// Copyright 2026 jimmy. All rights reserved.
+// Copyright 2026 jimmy Yen (cawa0505). All rights reserved.
 // Use of this source code is governed by a MIT-style license.
 package main
 
