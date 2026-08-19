@@ -20,10 +20,10 @@
 
 ## 3. Track 1 Hard Guard — Graphify Validation
 
-- [ ] 3.1 整合 Graphify MCP 為同步 AST/code graph 驗證 provider
-- [ ] 3.2 定義 degraded mode 行為（Graphify 不可用時的 policy 決定放行或拒絕）
-- [ ] 3.3 實作 Graphify MCP client wrapper（go-sdk MCP client 呼叫）
-- [ ] 3.4 實作逾時保護（Graphify 回應逾期的處理）
+- [x] 3.1 整合 Graphify MCP 為同步 AST/code graph 驗證 provider（go-sdk stdio client wrapper）
+- [x] 3.2 定義 degraded mode 行為（Graphify binary 未配置或呼叫失敗 → 回傳錯誤，由 caller 決定是否阻擋）
+- [x] 3.3 實作 Graphify MCP client wrapper（go-sdk MCP client 呼叫 `graphify_skeleton_extract`）
+- [x] 3.4 實作逾時保護（configurable timeout 預設 30s，context deadline 優先）
 - [ ] 3.5 [待討論] degraded mode 的精確 policy 定義：哪些情境可放行、哪些必須阻擋
 
 ## 4. Track 2 Soft Guard — Provider Integration
@@ -52,8 +52,8 @@
 
 - [x] 6.1 將 remote repository 改名為 `guardrail-mcp`（GitHub UI 操作）
 - [x] 6.2 更新 local remote URL：`git remote set-url origin git@github.com:cawa0505/guardrail-mcp.git`
-- [ ] 6.3 [待討論] 本地 Go module path / binary name / 目錄名稱的後續相容性改名
-- [ ] 6.4 [待討論] 改名後 openspec/specs 中引用舊 module path 的更新策略
+- [x] 6.3 本地 Go module path / binary name / 目錄名稱已統一改名（6.1-6.2 時一併完成）
+- [x] 6.4 openspec 文件更新：移除雙命名策略段落，修正 spec 中 module path 引用
 
 ## 7. README 對齊
 
