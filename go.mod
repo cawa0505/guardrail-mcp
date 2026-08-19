@@ -1,4 +1,4 @@
-module github.com/jimmy/statemachine-mcp
+module github.com/cawa0505/guardrail-mcp
 
 go 1.26.5
 

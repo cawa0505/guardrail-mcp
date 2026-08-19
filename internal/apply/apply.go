@@ -1,6 +1,6 @@
 // Copyright 2026 jimmy. All rights reserved.
 // Use of this source code is governed by a MIT-style license.
-package main
+package apply
 
 import (
 	"bytes"
@@ -11,17 +11,17 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cawa0505/guardrail-mcp/internal/state"
 )
 
 // ── Patch Application ──
 
-// applyPatchContent applies a search/replace to the file content.
-// Returns the new content on success, or an error if the search block is not found.
-func applyPatchContent(original, search, replace string) (string, error) {
+// ApplyPatchContent applies a search/replace to the file content.
+func ApplyPatchContent(original, search, replace string) (string, error) {
 	idx := strings.Index(original, search)
 	if idx < 0 {
-		// Show first few lines as context for the agent
-		lines := strings.SplitN(original, "\n", 12) // 11 lines max + indication
+		lines := strings.SplitN(original, "\n", 12)
 		limit := len(lines)
 		if limit > 11 {
 			limit = 11
@@ -48,7 +48,7 @@ var projectMarkers = []string{
 	"Makefile",
 }
 
-func findProjectRoot(path string) string {
+func FindProjectRoot(path string) string {
 	dir := filepath.Dir(path)
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
@@ -63,7 +63,7 @@ func findProjectRoot(path string) string {
 		}
 		parent := filepath.Dir(absDir)
 		if parent == absDir {
-			return "" // reached filesystem root
+			return ""
 		}
 		absDir = parent
 	}
@@ -77,7 +77,7 @@ type Compiler struct {
 	Args    []string
 }
 
-func detectCompiler(projectRoot string) *Compiler {
+func DetectCompiler(projectRoot string) *Compiler {
 	if _, err := os.Stat(filepath.Join(projectRoot, "Cargo.toml")); err == nil {
 		return &Compiler{
 			Name:    "cargo",
@@ -100,7 +100,6 @@ func detectCompiler(projectRoot string) *Compiler {
 		}
 	}
 	if _, err := os.Stat(filepath.Join(projectRoot, "package.json")); err == nil {
-		// Try tsc first, fall back to eslint
 		if _, err := os.Stat(filepath.Join(projectRoot, "tsconfig.json")); err == nil {
 			return &Compiler{
 				Name:    "tsc",
@@ -112,10 +111,9 @@ func detectCompiler(projectRoot string) *Compiler {
 	return nil
 }
 
-func runCompiler(compiler *Compiler, projectRoot string) *CompResult {
-	// If no compiler detected, skip validation
+func RunCompiler(compiler *Compiler, projectRoot string) *state.CompResult {
 	if compiler == nil {
-		return &CompResult{Success: true, RawOutput: "no compiler detected, skipping validation"}
+		return &state.CompResult{Success: true, RawOutput: "no compiler detected, skipping validation"}
 	}
 
 	cmd := exec.Command(compiler.Command, compiler.Args...)
@@ -129,12 +127,12 @@ func runCompiler(compiler *Compiler, projectRoot string) *CompResult {
 	output := strings.TrimSpace(stdout.String() + "\n" + stderr.String())
 
 	if err != nil {
-		return &CompResult{
+		return &state.CompResult{
 			Success:   false,
 			RawOutput: output,
 		}
 	}
-	return &CompResult{
+	return &state.CompResult{
 		Success:   true,
 		RawOutput: output,
 	}
@@ -142,9 +140,7 @@ func runCompiler(compiler *Compiler, projectRoot string) *CompResult {
 
 // ── Staging Buffer ──
 
-// setupStagingDir creates the staging directory.
-// Prefers $XDG_RUNTIME_DIR/statemachine-staging/, falls back to /tmp/statemachine-staging/.
-func setupStagingDir() (string, error) {
+func SetupStagingDir() (string, error) {
 	dir := os.Getenv("XDG_RUNTIME_DIR")
 	if dir != "" {
 		stagingDir := filepath.Join(dir, "statemachine-staging")
@@ -159,14 +155,11 @@ func setupStagingDir() (string, error) {
 	return stagingDir, nil
 }
 
-// backupFile copies srcPath to a flat-named .bak file under stagingDir.
-// Returns the backup path.
-func backupFile(srcPath, stagingDir string) (string, error) {
+func BackupFile(srcPath, stagingDir string) (string, error) {
 	absPath, err := filepath.Abs(srcPath)
 	if err != nil {
 		return "", fmt.Errorf("backup: resolve path: %w", err)
 	}
-	// Flat name: replace all "/" with "_"
 	safeName := strings.ReplaceAll(absPath, "/", "_")
 	backupPath := filepath.Join(stagingDir, safeName+".bak")
 
@@ -180,8 +173,7 @@ func backupFile(srcPath, stagingDir string) (string, error) {
 	return backupPath, nil
 }
 
-// restoreFromBackup copies the backup file back to targetPath.
-func restoreFromBackup(backupPath, targetPath string) error {
+func RestoreFromBackup(backupPath, targetPath string) error {
 	data, err := os.ReadFile(backupPath)
 	if err != nil {
 		return fmt.Errorf("restore: read backup: %w", err)
@@ -189,16 +181,12 @@ func restoreFromBackup(backupPath, targetPath string) error {
 	return os.WriteFile(targetPath, data, 0644)
 }
 
-// cleanupBackup removes the backup file. Errors are silently ignored.
-func cleanupBackup(backupPath string) {
+func CleanupBackup(backupPath string) {
 	os.Remove(backupPath)
 }
 
-// ── Graphify Integration ──
-
-// spawnGraphifyExtract runs `graphify extract <projectDir>` in the background.
-// Updates ast_synced in state.json when done.
-func spawnGraphifyExtract(projectRoot string, modifiedFile string) {
+// SpawnGraphifyExtract runs `graphify extract <projectDir>` in the background.
+func SpawnGraphifyExtract(projectRoot string, modifiedFile string) {
 	go func() {
 		start := time.Now()
 		log.Printf("[graphify] starting extract for %s (triggered by %s)", projectRoot, modifiedFile)
@@ -215,20 +203,18 @@ func spawnGraphifyExtract(projectRoot string, modifiedFile string) {
 
 		if err != nil {
 			log.Printf("[graphify] extract failed after %v: %v\n%s", elapsed, err, stderr.String())
-			// Don't set ast_synced on failure — next get_status will show stale
 			return
 		}
 
 		log.Printf("[graphify] extract completed in %v", elapsed)
 
-		// Update ast_synced in state.json
-		st, loadErr := loadState()
+		st, loadErr := state.LoadState()
 		if loadErr != nil {
 			log.Printf("[graphify] failed to load state for ast_synced update: %v", loadErr)
 			return
 		}
 		st.ASTSynced = true
-		if saveErr := saveState(st); saveErr != nil {
+		if saveErr := state.SaveState(st); saveErr != nil {
 			log.Printf("[graphify] failed to save state with ast_synced=true: %v", saveErr)
 		}
 	}()

@@ -1,6 +1,6 @@
 // Copyright 2026 jimmy. All rights reserved.
 // Use of this source code is governed by a MIT-style license.
-package main
+package state
 
 import (
 	"encoding/json"
@@ -14,21 +14,22 @@ import (
 // ── State Schema ──
 
 type State struct {
-	Version        string        `json:"version"`
-	Phase          string        `json:"phase"`
-	ActiveGoal     string        `json:"active_goal"`
-	AllowedActions []string      `json:"allowed_actions"`
-	StagingBuffer  StagingBuf    `json:"staging_buffer"`
-	Checkpoints    []Checkpoint  `json:"checkpoints"`
-	FailedAttempts int           `json:"failed_attempts"`
-	ASTSynced      bool          `json:"ast_synced"`
+	Version        string       `json:"version"`
+	Phase          string       `json:"phase"`
+	ActiveGoal     string       `json:"active_goal"`
+	AllowedActions []string     `json:"allowed_actions"`
+	StagingBuffer  StagingBuf   `json:"staging_buffer"`
+	Checkpoints    []Checkpoint `json:"checkpoints"`
+	FailedAttempts int          `json:"failed_attempts"`
+	ASTSynced      bool         `json:"ast_synced"`
+	CommitToken    *CommitToken `json:"commit_token,omitempty"`
 }
 
 type StagingBuf struct {
-	Dir              string        `json:"dir"`
-	HasPendingPatch  bool          `json:"has_pending_patch"`
-	TargetFile       *string       `json:"target_file"`
-	PatchContent     *string       `json:"patch_content"`
+	Dir                string      `json:"dir"`
+	HasPendingPatch    bool        `json:"has_pending_patch"`
+	TargetFile         *string     `json:"target_file"`
+	PatchContent       *string     `json:"patch_content"`
 	LastCompilerResult *CompResult `json:"last_compiler_result,omitempty"`
 }
 
@@ -44,9 +45,28 @@ type Checkpoint struct {
 	ModifiedFiles []string `json:"modified_files"`
 }
 
+// CommitToken represents a single-use commit authorization token.
+type CommitToken struct {
+	ID         string        `json:"id"`
+	CreatedAt  time.Time     `json:"created_at"`
+	ExpiresAt  time.Time     `json:"expires_at"`
+	Bindings   TokenBindings `json:"bindings"`
+	Used       bool          `json:"used"`
+	ConsumedAt *time.Time    `json:"consumed_at,omitempty"`
+	Revoked    bool          `json:"revoked"`
+	RevokedAt  *time.Time    `json:"revoked_at,omitempty"`
+}
+
+// TokenBindings represents the constraints a token is locked to.
+type TokenBindings struct {
+	ProposalHash  string `json:"proposal_hash"`
+	WorkspacePath string `json:"workspace_path"`
+	Revision      string `json:"revision"`
+}
+
 // ── Phase Gate ──
 
-var phaseActions = map[string][]string{
+var PhaseActions = map[string][]string{
 	"INIT":      {"checkpoint", "get_status"},
 	"PLANNING":  {"inspect_context", "checkpoint", "get_status"},
 	"EXECUTING": {"inspect_context", "apply_patch", "checkpoint", "get_status"},
@@ -55,8 +75,8 @@ var phaseActions = map[string][]string{
 	"COMPLETED": {"get_status"},
 }
 
-func phaseAllowed(phase, action string) bool {
-	for _, a := range phaseActions[phase] {
+func PhaseAllowed(phase, action string) bool {
+	for _, a := range PhaseActions[phase] {
 		if a == action {
 			return true
 		}
@@ -66,7 +86,7 @@ func phaseAllowed(phase, action string) bool {
 
 // ── Load / Save ──
 
-func stateDir() (string, error) {
+func StateDir() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -75,14 +95,12 @@ func stateDir() (string, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
-	// ensure .opencode/ is gitignored
 	if err := ensureGitignore(cwd); err != nil {
 		return "", err
 	}
 	return dir, nil
 }
 
-// ensureGitignore appends .opencode/ to .gitignore if not already present.
 func ensureGitignore(cwd string) error {
 	gp := filepath.Join(cwd, ".gitignore")
 	data, err := os.ReadFile(gp)
@@ -90,19 +108,16 @@ func ensureGitignore(cwd string) error {
 		if !os.IsNotExist(err) {
 			return err
 		}
-		// .gitignore doesn't exist yet — create one
 		return os.WriteFile(gp, []byte("# StateMachineMcp auto-generated state\n.opencode/\n"), 0644)
 	}
 	if containsGitignoreEntry(data, ".opencode/") {
-		return nil // already present
+		return nil
 	}
-	// append to existing .gitignore
 	f, err := os.OpenFile(gp, os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	// ensure trailing newline before appending
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		if _, err := f.WriteString("\n"); err != nil {
 			return err
@@ -123,14 +138,14 @@ func containsGitignoreEntry(data []byte, entry string) bool {
 }
 
 func statePath() (string, error) {
-	dir, err := stateDir()
+	dir, err := StateDir()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "state.json"), nil
 }
 
-func loadState() (*State, error) {
+func LoadState() (*State, error) {
 	p, err := statePath()
 	if err != nil {
 		return nil, err
@@ -138,7 +153,7 @@ func loadState() (*State, error) {
 	data, err := os.ReadFile(p)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return defaultState(), nil
+			return DefaultState(), nil
 		}
 		return nil, fmt.Errorf("read state: %w", err)
 	}
@@ -146,12 +161,11 @@ func loadState() (*State, error) {
 	if err := json.Unmarshal(data, &st); err != nil {
 		return nil, fmt.Errorf("parse state: %w", err)
 	}
-	// ensure allowed_actions matches current phase
-	st.AllowedActions = phaseActions[st.Phase]
+	st.AllowedActions = PhaseActions[st.Phase]
 	return &st, nil
 }
 
-func saveState(st *State) error {
+func SaveState(st *State) error {
 	p, err := statePath()
 	if err != nil {
 		return err
@@ -163,12 +177,12 @@ func saveState(st *State) error {
 	return os.WriteFile(p, data, 0644)
 }
 
-func defaultState() *State {
+func DefaultState() *State {
 	return &State{
 		Version:        "1.0.0",
 		Phase:          "INIT",
 		ActiveGoal:     "",
-		AllowedActions: phaseActions["INIT"],
+		AllowedActions: PhaseActions["INIT"],
 		StagingBuffer:  StagingBuf{},
 		Checkpoints:    []Checkpoint{},
 		ASTSynced:      false,
@@ -177,6 +191,27 @@ func defaultState() *State {
 
 // ── Helpers ──
 
-func nextCheckpointID() string {
+func NextCheckpointID() string {
 	return fmt.Sprintf("chk_%s", time.Now().UTC().Format("20060102_150405"))
+}
+
+func ModifiedFiles(st *State) []string {
+	var files []string
+	seen := map[string]bool{}
+	for _, cp := range st.Checkpoints {
+		for _, f := range cp.ModifiedFiles {
+			if !seen[f] {
+				seen[f] = true
+				files = append(files, f)
+			}
+		}
+	}
+	return files
+}
+
+func LastCheckpointID(st *State) string {
+	if len(st.Checkpoints) == 0 {
+		return ""
+	}
+	return st.Checkpoints[len(st.Checkpoints)-1].ID
 }

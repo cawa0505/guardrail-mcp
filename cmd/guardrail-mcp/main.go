@@ -9,8 +9,13 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/cawa0505/guardrail-mcp/internal/apply"
+	"github.com/cawa0505/guardrail-mcp/internal/inspect"
+	"github.com/cawa0505/guardrail-mcp/internal/state"
+	"github.com/cawa0505/guardrail-mcp/internal/token"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -98,6 +103,38 @@ func main() {
 		},
 	}, handleCheckpoint)
 
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "commit_token",
+		Description: "管理 Commit Token 生命週期：建立、驗證、消費、撤銷。Token 是單次使用的授權憑證，綁定 proposal hash、workspace 路徑與 git revision。",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"action": map[string]any{
+					"type":        "string",
+					"enum":        []string{"create", "validate", "consume", "revoke", "status"},
+					"description": "操作類型：create（建立）、validate（驗證）、consume（消費）、revoke（撤銷）、status（查詢狀態）",
+				},
+				"token_id": map[string]any{
+					"type":        "string",
+					"description": "Token ID（validate/consume/revoke/status 需要）",
+				},
+				"proposal_hash": map[string]any{
+					"type":        "string",
+					"description": "Proposal SHA-256 hash（create 必填，validate 可選）",
+				},
+				"workspace_path": map[string]any{
+					"type":        "string",
+					"description": "Workspace 路徑（create 可選，預設為目前目錄）",
+				},
+				"ttl_minutes": map[string]any{
+					"type":        "integer",
+					"description": "Token 有效期限（分鐘，create 可選，預設 30）",
+				},
+			},
+			"required": []string{"action"},
+		},
+	}, handleCommitToken)
+
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Printf("statemachine-mcp: %v", err)
 		os.Exit(1)
@@ -113,11 +150,11 @@ type InspectArgs struct {
 }
 
 func handleInspectContext(ctx context.Context, req *mcp.CallToolRequest, args InspectArgs) (*mcp.CallToolResult, any, error) {
-	st, err := loadState()
+	st, err := state.LoadState()
 	if err != nil {
 		return fail("inspect_context: %v", err)
 	}
-	if !phaseAllowed(st.Phase, "inspect_context") {
+	if !state.PhaseAllowed(st.Phase, "inspect_context") {
 		return fail("inspect_context: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
 	}
 
@@ -126,18 +163,18 @@ func handleInspectContext(ctx context.Context, req *mcp.CallToolRequest, args In
 		mode = "skeleton"
 	}
 
-	result, err := inspectFile(args.Path, mode, args.LineRange)
+	result, err := inspect.InspectFile(args.Path, mode, args.LineRange)
 	if err != nil {
 		return fail("inspect_context: %v", err)
 	}
 
 	return ok(map[string]any{
-		"language":          result.Language,
-		"total_lines":       result.TotalLines,
+		"language":           result.Language,
+		"total_lines":        result.TotalLines,
 		"token_reduced_from": result.TokenReducedFrom,
 		"token_reduced_to":   result.TokenReducedTo,
-		"content":           result.Content,
-		"truncated":         result.Truncated,
+		"content":            result.Content,
+		"truncated":          result.Truncated,
 	})
 }
 
@@ -149,15 +186,14 @@ type ApplyPatchArgs struct {
 }
 
 func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyPatchArgs) (*mcp.CallToolResult, any, error) {
-	st, err := loadState()
+	st, err := state.LoadState()
 	if err != nil {
 		return fail("apply_patch: %v", err)
 	}
-	if !phaseAllowed(st.Phase, "apply_patch") {
+	if !state.PhaseAllowed(st.Phase, "apply_patch") {
 		return fail("apply_patch: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
 	}
 
-	// Resolve the file path
 	fullPath := args.Path
 	if !filepath.IsAbs(args.Path) {
 		cwd, err := os.Getwd()
@@ -167,70 +203,61 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 		fullPath = filepath.Join(cwd, args.Path)
 	}
 
-	// Read the original file
 	original, err := os.ReadFile(fullPath)
 	if err != nil {
 		return fail("apply_patch: read file: %v", err)
 	}
 
-	// Apply the search/replace patch
-	newContent, err := applyPatchContent(string(original), args.SearchBlock, args.ReplaceBlock)
+	newContent, err := apply.ApplyPatchContent(string(original), args.SearchBlock, args.ReplaceBlock)
 	if err != nil {
 		return fail("apply_patch: %v", err)
 	}
 
-	// Set up staging directory and create crash-safe backup
-	stagingDir, err := setupStagingDir()
+	stagingDir, err := apply.SetupStagingDir()
 	if err != nil {
 		return fail("apply_patch: %v", err)
 	}
 
-	backupPath, err := backupFile(fullPath, stagingDir)
+	backupPath, err := apply.BackupFile(fullPath, stagingDir)
 	if err != nil {
 		return fail("apply_patch: %v", err)
 	}
 
-	// Write the new content directly so the compiler sees the patched file in place
 	if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
-		cleanupBackup(backupPath)
+		apply.CleanupBackup(backupPath)
 		return fail("apply_patch: write file: %v", err)
 	}
 
-	// Find project root and run compiler validation
-	projectRoot := findProjectRoot(fullPath)
-	var compResult *CompResult
+	projectRoot := apply.FindProjectRoot(fullPath)
+	var compResult *state.CompResult
 	if projectRoot != "" {
-		compiler := detectCompiler(projectRoot)
-		compResult = runCompiler(compiler, projectRoot)
+		compiler := apply.DetectCompiler(projectRoot)
+		compResult = apply.RunCompiler(compiler, projectRoot)
 	} else {
-		compResult = &CompResult{Success: true, RawOutput: "no project root found, skipping compiler validation"}
+		compResult = &state.CompResult{Success: true, RawOutput: "no project root found, skipping compiler validation"}
 	}
 
 	if !compResult.Success {
-		// Compiler failed — restore from disk backup, not from memory
-		restoreFromBackup(backupPath, fullPath)
-		cleanupBackup(backupPath)
+		apply.RestoreFromBackup(backupPath, fullPath)
+		apply.CleanupBackup(backupPath)
 
 		st.FailedAttempts++
 		st.StagingBuffer.LastCompilerResult = compResult
 
 		if st.FailedAttempts >= 3 {
-			// Auto-transition to PAUSED
 			st.Phase = "PAUSED"
-			st.AllowedActions = phaseActions["PAUSED"]
+			st.AllowedActions = state.PhaseActions["PAUSED"]
 			st.FailedAttempts = 0
-			saveState(st)
+			state.SaveState(st)
 			return fail("apply_patch: compiler validation failed 3 times — auto-transitioned to PAUSED phase. Use checkpoint to resume.\n%s", compResult.RawOutput)
 		}
 
-		saveState(st)
+		state.SaveState(st)
 		return fail("apply_patch: compiler validation failed (attempt %d/3):\n%s", st.FailedAttempts, compResult.RawOutput)
 	}
 
-	// Compiler passed — remove the backup and keep the change
-	cleanupBackup(backupPath)
+	apply.CleanupBackup(backupPath)
 	st.FailedAttempts = 0
-	// Record the modified file in the staging buffer
 	modifiedFile := args.Path
 	relPath := args.Path
 	if filepath.IsAbs(args.Path) {
@@ -242,7 +269,7 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 	}
 	modifiedFile = relPath
 
-	st.StagingBuffer = StagingBuf{
+	st.StagingBuffer = state.StagingBuf{
 		Dir:                stagingDir,
 		HasPendingPatch:    false,
 		TargetFile:         &modifiedFile,
@@ -250,30 +277,27 @@ func handleApplyPatch(ctx context.Context, req *mcp.CallToolRequest, args ApplyP
 		LastCompilerResult: compResult,
 	}
 
-	// Add to current checkpoint's modified_files
 	if len(st.Checkpoints) > 0 {
 		cp := &st.Checkpoints[len(st.Checkpoints)-1]
 		cp.ModifiedFiles = append(cp.ModifiedFiles, modifiedFile)
 	}
 
-	// Mark AST as stale — graphify needs to catch up
 	st.ASTSynced = false
 
-	if err := saveState(st); err != nil {
+	if err := state.SaveState(st); err != nil {
 		return fail("apply_patch: save state: %v", err)
 	}
 
-	// Spawn graphify extract in background (Phase 1: full re-extract)
 	if projectRoot != "" {
-		spawnGraphifyExtract(projectRoot, modifiedFile)
+		apply.SpawnGraphifyExtract(projectRoot, modifiedFile)
 	}
 
 	return ok(map[string]any{
-		"success":             true,
-		"file":                modifiedFile,
-		"compiler":            compilerName(projectRoot),
-		"compiler_output":     compResult.RawOutput,
-		"ast_synced":          false,
+		"success":                  true,
+		"file":                     modifiedFile,
+		"compiler":                 compilerName(projectRoot),
+		"compiler_output":          compResult.RawOutput,
+		"ast_synced":               false,
 		"graphify_extract_triggered": projectRoot != "",
 	})
 }
@@ -282,7 +306,7 @@ func compilerName(projectRoot string) string {
 	if projectRoot == "" {
 		return "none"
 	}
-	c := detectCompiler(projectRoot)
+	c := apply.DetectCompiler(projectRoot)
 	if c == nil {
 		return "none"
 	}
@@ -290,7 +314,7 @@ func compilerName(projectRoot string) string {
 }
 
 func handleGetStatus(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-	st, err := loadState()
+	st, err := state.LoadState()
 	if err != nil {
 		return fail("get_status: %v", err)
 	}
@@ -298,9 +322,10 @@ func handleGetStatus(ctx context.Context, req *mcp.CallToolRequest, _ struct{}) 
 		"phase":                     st.Phase,
 		"active_goal":               st.ActiveGoal,
 		"allowed_actions":           st.AllowedActions,
-		"modified_files_in_session": modifiedFiles(st),
-		"last_checkpoint_id":        lastCheckpointID(st),
+		"modified_files_in_session": state.ModifiedFiles(st),
+		"last_checkpoint_id":        state.LastCheckpointID(st),
 		"ast_synced":                st.ASTSynced,
+		"commit_token":              st.CommitToken,
 	})
 }
 
@@ -310,23 +335,20 @@ type CheckpointArgs struct {
 }
 
 func handleCheckpoint(ctx context.Context, req *mcp.CallToolRequest, args CheckpointArgs) (*mcp.CallToolResult, any, error) {
-	st, err := loadState()
+	st, err := state.LoadState()
 	if err != nil {
 		return fail("checkpoint: %v", err)
 	}
 
-	if !phaseAllowed(st.Phase, "checkpoint") {
+	if !state.PhaseAllowed(st.Phase, "checkpoint") {
 		return fail("checkpoint: action not allowed in phase %s (allowed: %v)", st.Phase, st.AllowedActions)
 	}
 
-	// determine next phase
 	nextPhase := args.NextPhase
 	if nextPhase == "" {
-		// default: stay in same phase
 		nextPhase = st.Phase
 	}
 
-	// validate phase transition
 	validTransitions := map[string][]string{
 		"INIT":      {"PLANNING"},
 		"PLANNING":  {"EXECUTING", "PLANNING"},
@@ -350,18 +372,17 @@ func handleCheckpoint(ctx context.Context, req *mcp.CallToolRequest, args Checkp
 		return fail("checkpoint: cannot transition from %s to %s (allowed: %v)", st.Phase, nextPhase, allowed)
 	}
 
-	// build checkpoint entry
-	cp := Checkpoint{
-		ID:        nextCheckpointID(),
+	cp := state.Checkpoint{
+		ID:        state.NextCheckpointID(),
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Summary:   args.Summary,
 	}
 	st.Checkpoints = append(st.Checkpoints, cp)
 	st.Phase = nextPhase
-	st.AllowedActions = phaseActions[nextPhase]
+	st.AllowedActions = state.PhaseActions[nextPhase]
 	st.ActiveGoal = args.Summary
 
-	if err := saveState(st); err != nil {
+	if err := state.SaveState(st); err != nil {
 		return fail("checkpoint: save state: %v", err)
 	}
 
@@ -370,6 +391,177 @@ func handleCheckpoint(ctx context.Context, req *mcp.CallToolRequest, args Checkp
 		"checkpoint_id": cp.ID,
 		"phase":         st.Phase,
 	})
+}
+
+// ── Commit Token Handler ──
+
+type CommitTokenArgs struct {
+	Action        string `json:"action"`
+	TokenID       string `json:"token_id"`
+	ProposalHash  string `json:"proposal_hash"`
+	WorkspacePath string `json:"workspace_path"`
+	TTLMinutes    int    `json:"ttl_minutes"`
+}
+
+func handleCommitToken(ctx context.Context, req *mcp.CallToolRequest, args CommitTokenArgs) (*mcp.CallToolResult, any, error) {
+	st, err := state.LoadState()
+	if err != nil {
+		return fail("commit_token: %v", err)
+	}
+
+	switch args.Action {
+	case "create":
+		if args.ProposalHash == "" {
+			return fail("commit_token create: proposal_hash is required")
+		}
+		wsPath := args.WorkspacePath
+		if wsPath == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				wsPath = cwd
+			}
+		}
+		ttl := time.Duration(args.TTLMinutes) * time.Minute
+		if args.TTLMinutes <= 0 {
+			ttl = token.DefaultTTL
+		}
+
+		tok, err := token.New(args.ProposalHash, wsPath, ttl)
+		if err != nil {
+			return fail("commit_token create: %v", err)
+		}
+
+		st.CommitToken = tok
+		if err := state.SaveState(st); err != nil {
+			return fail("commit_token create: save state: %v", err)
+		}
+
+		return ok(map[string]any{
+			"success":       true,
+			"token_id":      tok.ID,
+			"created_at":    tok.CreatedAt,
+			"expires_at":    tok.ExpiresAt,
+			"proposal_hash": tok.Bindings.ProposalHash,
+			"workspace":     tok.Bindings.WorkspacePath,
+			"revision":      tok.Bindings.Revision,
+		})
+
+	case "validate":
+		if st.CommitToken == nil {
+			return fail("commit_token validate: no active token")
+		}
+		if args.TokenID != "" && st.CommitToken.ID != args.TokenID {
+			return fail("commit_token validate: token ID mismatch")
+		}
+		wsPath := args.WorkspacePath
+		if wsPath == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				wsPath = cwd
+			}
+		}
+
+		if !token.IsValid(st.CommitToken) {
+			var reasons []string
+			if token.IsExpired(st.CommitToken) {
+				reasons = append(reasons, "expired")
+			}
+			if st.CommitToken.Used {
+				reasons = append(reasons, "already consumed")
+			}
+			if st.CommitToken.Revoked {
+				reasons = append(reasons, "revoked")
+			}
+			return ok(map[string]any{
+				"valid":  false,
+				"reason": fmt.Sprintf("token is %s", strings.Join(reasons, ", ")),
+			})
+		}
+
+		bindErr := token.ValidateBindings(st.CommitToken, args.ProposalHash, wsPath)
+		if bindErr != nil {
+			return ok(map[string]any{
+				"valid":  false,
+				"reason": bindErr.Error(),
+			})
+		}
+
+		return ok(map[string]any{
+			"valid": true,
+		})
+
+	case "consume":
+		if st.CommitToken == nil {
+			return fail("commit_token consume: no active token")
+		}
+		if args.TokenID != "" && st.CommitToken.ID != args.TokenID {
+			return fail("commit_token consume: token ID mismatch")
+		}
+
+		// Validate bindings before consuming
+		wsPath := args.WorkspacePath
+		if wsPath == "" {
+			if cwd, err := os.Getwd(); err == nil {
+				wsPath = cwd
+			}
+		}
+		if bindErr := token.ValidateBindings(st.CommitToken, args.ProposalHash, wsPath); bindErr != nil {
+			return fail("commit_token consume: %v", bindErr)
+		}
+
+		if err := token.Consume(st.CommitToken); err != nil {
+			return fail("commit_token consume: %v", err)
+		}
+
+		if err := state.SaveState(st); err != nil {
+			return fail("commit_token consume: save state: %v", err)
+		}
+
+		return ok(map[string]any{
+			"success":     true,
+			"consumed_at": *st.CommitToken.ConsumedAt,
+		})
+
+	case "revoke":
+		if st.CommitToken == nil {
+			return fail("commit_token revoke: no active token")
+		}
+		if args.TokenID != "" && st.CommitToken.ID != args.TokenID {
+			return fail("commit_token revoke: token ID mismatch")
+		}
+
+		if err := token.Revoke(st.CommitToken); err != nil {
+			return fail("commit_token revoke: %v", err)
+		}
+
+		if err := state.SaveState(st); err != nil {
+			return fail("commit_token revoke: save state: %v", err)
+		}
+
+		return ok(map[string]any{
+			"success":    true,
+			"revoked_at": *st.CommitToken.RevokedAt,
+		})
+
+	case "status":
+		if st.CommitToken == nil {
+			return ok(map[string]any{
+				"token_present": false,
+			})
+		}
+		return ok(map[string]any{
+			"token_present": true,
+			"token_id":      st.CommitToken.ID,
+			"created_at":    st.CommitToken.CreatedAt,
+			"expires_at":    st.CommitToken.ExpiresAt,
+			"expired":       token.IsExpired(st.CommitToken),
+			"used":          st.CommitToken.Used,
+			"revoked":       st.CommitToken.Revoked,
+			"valid":         token.IsValid(st.CommitToken),
+			"bindings":      st.CommitToken.Bindings,
+		})
+
+	default:
+		return fail("commit_token: unknown action %q", args.Action)
+	}
 }
 
 // ── helpers ──
@@ -386,25 +578,4 @@ func fail(format string, a ...any) (*mcp.CallToolResult, any, error) {
 		IsError: true,
 		Content: []mcp.Content{&mcp.TextContent{Text: fmt.Sprintf(format, a...)}},
 	}, nil, nil
-}
-
-func modifiedFiles(st *State) []string {
-	var files []string
-	seen := map[string]bool{}
-	for _, cp := range st.Checkpoints {
-		for _, f := range cp.ModifiedFiles {
-			if !seen[f] {
-				seen[f] = true
-				files = append(files, f)
-			}
-		}
-	}
-	return files
-}
-
-func lastCheckpointID(st *State) string {
-	if len(st.Checkpoints) == 0 {
-		return ""
-	}
-	return st.Checkpoints[len(st.Checkpoints)-1].ID
 }

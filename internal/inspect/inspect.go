@@ -1,6 +1,6 @@
 // Copyright 2026 jimmy. All rights reserved.
 // Use of this source code is governed by a MIT-style license.
-package main
+package inspect
 
 import (
 	"bufio"
@@ -61,7 +61,6 @@ var (
 
 const maxSkeletonLines = 100
 
-// reduceText strips comments, blank lines, and repeated lines from text.
 func reduceText(text string) string {
 	scanner := bufio.NewScanner(strings.NewReader(text))
 	var lines []string
@@ -72,7 +71,6 @@ func reduceText(text string) string {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// strip multi-line comments
 		if inMLComment {
 			if reMLEnd.MatchString(line) {
 				inMLComment = false
@@ -84,22 +82,16 @@ func reduceText(text string) string {
 				inMLComment = true
 				continue
 			}
-			// /* ... */ on same line — strip from /* onward
 			idx := reMLStart.FindStringIndex(line)
 			line = strings.TrimSpace(line[:idx[0]])
 		}
 
-		// strip single-line comments (preserve shebang)
 		if !strings.HasPrefix(line, "#!") && reSingleComment.MatchString(line) {
 			continue
 		}
-
-		// strip blank lines
 		if reBlank.MatchString(line) {
 			continue
 		}
-
-		// deduplicate repeated lines (3+ consecutive identical)
 		trimmed := strings.TrimSpace(line)
 		if trimmed == prevLine {
 			repeatCount++
@@ -117,12 +109,9 @@ func reduceText(text string) string {
 	return strings.Join(lines, "\n")
 }
 
-// countTokens is a rough token estimate (chars / 4).
 func countTokens(text string) int {
 	return len([]rune(text)) / 4
 }
-
-// ── Range Reader ──
 
 func readLines(path string, start, end int) (string, int, error) {
 	f, err := os.Open(path)
@@ -149,7 +138,7 @@ func readLines(path string, start, end int) (string, int, error) {
 
 // ── Main Inspect Logic ──
 
-func inspectFile(path, mode string, lineRange []int) (*InspectResult, error) {
+func InspectFile(path, mode string, lineRange []int) (*InspectResult, error) {
 	fullPath := path
 	if !filepath.IsAbs(path) {
 		cwd, err := os.Getwd()
@@ -198,7 +187,7 @@ func inspectFile(path, mode string, lineRange []int) (*InspectResult, error) {
 		}
 		return result, nil
 
-	default: // "skeleton" — regex-based reduction (tree-sitter via graphify-mcp's graphify_skeleton_extract)
+	default: // "skeleton" — regex-based reduction
 		cleaned := reduceText(string(data))
 		cleanedLines := strings.Split(cleaned, "\n")
 		if len(cleanedLines) > maxSkeletonLines {
@@ -216,7 +205,6 @@ func inspectFile(path, mode string, lineRange []int) (*InspectResult, error) {
 }
 
 // skeletonByRegex builds a simple skeleton using regex heuristics.
-// Interim solution until tree-sitter extractors are implemented.
 func skeletonByRegex(text, lang string) string {
 	lines := strings.Split(text, "\n")
 	var out []string
@@ -286,7 +274,6 @@ func skeletonByRegex(text, lang string) string {
 	return strings.Join(out, "\n")
 }
 
-// isTextFile checks if a file looks like text (no null bytes).
 func isTextFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
