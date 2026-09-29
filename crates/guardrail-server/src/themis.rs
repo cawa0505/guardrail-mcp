@@ -249,6 +249,7 @@ impl ThemisClient {
         self.cfg.enabled
     }
 
+    #[allow(dead_code)]
     pub fn session_id(&self) -> &str {
         &self.session_id
     }

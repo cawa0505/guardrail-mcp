@@ -5,7 +5,7 @@
 //! commit_token). State lives at `.guardrail/state.json` with
 //! `.opencode/state.json` fallback (legacy parity).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -63,10 +63,26 @@ struct GuardrailServer {
 
 impl GuardrailServer {
     fn new() -> Self {
-        let root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        // Resolve a writable working root. If the current working directory is read-only
+        // (e.g. /opt/nexus when spawned by systemd under user nexus), fallback gracefully
+        // to ~/.local/state/guardrail or /tmp/guardrail.
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let root = if Self::is_dir_writable(&cwd) {
+            cwd
+        } else if let Ok(home) = std::env::var("HOME") {
+            let user_state = PathBuf::from(home).join(".local").join("state").join("guardrail");
+            let _ = std::fs::create_dir_all(&user_state);
+            user_state
+        } else {
+            let tmp = PathBuf::from("/tmp/guardrail");
+            let _ = std::fs::create_dir_all(&tmp);
+            tmp
+        };
+
         let store = StateStore::new(&root);
         let state = store.load().unwrap_or_default();
         let state_dir = root.join(".guardrail");
+        let _ = std::fs::create_dir_all(&state_dir);
         let evidence = EvidenceEngine::new(state_dir.join("evidence.jsonl"));
         let softguard = SoftGuardConfig::load(&state_dir).unwrap_or_default();
         let graphify = GraphifyClient::new(&GraphifyConfig::load(&state_dir).unwrap_or_default());
@@ -87,6 +103,17 @@ impl GuardrailServer {
             graphify,
             themis,
             state: Mutex::new(state),
+        }
+    }
+
+    fn is_dir_writable(path: &Path) -> bool {
+        let probe = path.join(format!(".write_probe_{}", std::process::id()));
+        match std::fs::write(&probe, b"ok") {
+            Ok(_) => {
+                let _ = std::fs::remove_file(probe);
+                true
+            }
+            Err(_) => false,
         }
     }
 
