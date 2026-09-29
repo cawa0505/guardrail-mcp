@@ -11,6 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 mod graphify;
 mod softguard;
+mod themis;
 
 use guardrail_adapter_coding::inspect::InspectEngine;
 use guardrail_adapter_coding::patch::PatchEngine;
@@ -30,6 +31,7 @@ use rmcp::service::{RequestContext, RoleServer};
 use rmcp::{ErrorData as McpError, ServerHandler, ServiceExt};
 use serde_json::{json, Value};
 use softguard::{SoftGuardConfig, VerifierInput};
+use themis::{ThemisClient, ThemisConfig};
 use tokio::sync::Mutex;
 
 fn now_secs() -> i64 {
@@ -55,6 +57,7 @@ struct GuardrailServer {
     evidence: EvidenceEngine,
     softguard: SoftGuardConfig,
     graphify: GraphifyClient,
+    themis: Arc<ThemisClient>,
     state: Mutex<StateData>,
 }
 
@@ -67,12 +70,22 @@ impl GuardrailServer {
         let evidence = EvidenceEngine::new(state_dir.join("evidence.jsonl"));
         let softguard = SoftGuardConfig::load(&state_dir).unwrap_or_default();
         let graphify = GraphifyClient::new(&GraphifyConfig::load(&state_dir).unwrap_or_default());
+        let themis_cfg = ThemisConfig::load(&state_dir).unwrap_or_default();
+        let session_id = format!("sess-{}", now_secs());
+        let themis = ThemisClient::new(themis_cfg, session_id);
+        if themis.is_enabled() {
+            let t = themis.clone();
+            tokio::spawn(async move {
+                let _ = t.fetch_policy().await;
+            });
+        }
         Self {
             root,
             store,
             evidence,
             softguard,
             graphify,
+            themis,
             state: Mutex::new(state),
         }
     }
@@ -86,13 +99,47 @@ impl GuardrailServer {
     /// Append one governance decision to the append-only evidence log. The
     /// engine auto-chains `parent_event` to the previous record hash.
     fn record_evidence(&self, actor: &Actor, action: &Action, decision: &Decision) -> Option<String> {
+        let ts = now_secs();
+        let event_id = format!("{}-{}", action.action_id, ts);
         let record = EvidenceRecord::new(
-            format!("{}-{}", action.action_id, now_secs()),
+            event_id.clone(),
             actor.clone(),
             action.clone(),
             decision.clone(),
-            now_secs(),
+            ts,
         );
+        if self.themis.is_enabled() {
+            let dec_str = match decision.kind {
+                DecisionKind::Allow => "ALLOW",
+                DecisionKind::Deny => "DENY",
+                DecisionKind::RequireVerification => "REQUIRE_VERIFICATION",
+                DecisionKind::RequireApproval => "REQUIRE_APPROVAL",
+            };
+            let t_rec = themis::EvidenceRecord {
+                event_id,
+                parent_event_hash: String::new(),
+                event_hash: String::new(),
+                timestamp: format!("{ts}"),
+                actor: themis::Actor {
+                    actor_type: themis::ActorType::Agent,
+                    id: actor.agent_id.clone(),
+                },
+                action: action.action_type.clone(),
+                resource: action.target.clone(),
+                decision: dec_str.to_string(),
+                policy_version: "1".to_string(),
+                policy_hash: "local".to_string(),
+                verifier: decision.verifier_id.clone(),
+                verification_result: Some(decision.reason.clone()),
+                input: action.payload.clone(),
+                output: Value::Null,
+                metadata: json!({}),
+            };
+            let client = self.themis.clone();
+            tokio::spawn(async move {
+                client.report_evidence(t_rec).await;
+            });
+        }
         match self.evidence.append(record) {
             Ok((_, hash)) => Some(hash),
             Err(e) => {
@@ -294,6 +341,14 @@ impl GuardrailServer {
                 self.record_evidence(&actor, &action, &d);
                 return Ok(Self::deny("transition", &e.to_string(), "DENY"));
             }
+            if target == Phase::Completed && self.themis.is_enabled() {
+                let t = self.themis.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = t.close_session(None).await {
+                        eprintln!("[guardrail] themis close_session anchor error: {e}");
+                    }
+                });
+            }
             state.phase = target;
         }
 
@@ -441,9 +496,11 @@ impl GuardrailServer {
             return Ok(Self::deny("phase_gate", &decision.reason, "DENY"));
         }
         if decision.kind == DecisionKind::RequireApproval {
-            // Route the approval request to the human over MCP elicitation.
+            // Route the approval request to Themis (if enabled) or MCP elicitation.
             self.record_evidence(&actor, &action, &decision);
-            return self.handle_require_approval(context, &actor, &action, &decision).await;
+            if let Some(denied) = self.handle_require_approval(context, &actor, &action, &decision).await? {
+                return Ok(denied);
+            }
         }
 
         // Validate patch shape.
@@ -589,16 +646,53 @@ impl GuardrailServer {
         )]))
     }
 
-    /// Handle a `RequireApproval` decision by asking the human via MCP
-    /// elicitation. If the client does not support elicitation, the request is
-    /// conservatively denied (never silently allowed).
+    /// Handle a `RequireApproval` decision via Themis remote human approval
+    /// (CONTRACT §3) when enabled, or via MCP elicitation fallback.
+    /// Returns `Ok(None)` when approved (allowing `apply_patch` to proceed),
+    /// or `Ok(Some(deny_result))` when rejected/timed out/unavailable.
     async fn handle_require_approval(
         &self,
         context: &RequestContext<RoleServer>,
         actor: &Actor,
         action: &Action,
         decision: &Decision,
-    ) -> Result<CallToolResult, McpError> {
+    ) -> Result<Option<CallToolResult>, McpError> {
+        if self.themis.is_enabled() {
+            let req_id = format!("req-{}-{}", action.action_id, now_secs());
+            let expires_at = format!("{}", now_secs() + 300);
+            match self
+                .themis
+                .request_and_await_approval(
+                    &req_id,
+                    &action.action_type,
+                    &action.target,
+                    "hardguard-sensitive",
+                    &expires_at,
+                    std::time::Duration::from_secs(60),
+                )
+                .await
+            {
+                Ok(sig) => {
+                    self.record_evidence(
+                        actor,
+                        action,
+                        &Decision::allow(
+                            format!("themis approved (req={}, sig={})", sig.request_id, sig.signature),
+                            now_secs(),
+                        ),
+                    );
+                    return Ok(None);
+                }
+                Err(reason) => {
+                    return Ok(Some(Self::deny(
+                        "themis_approval_denied",
+                        &reason,
+                        "REQUIRE_APPROVAL",
+                    )));
+                }
+            }
+        }
+
         #[derive(serde::Deserialize, schemars::JsonSchema)]
         struct Approval {
             approved: bool,
@@ -609,11 +703,11 @@ impl GuardrailServer {
 
         let modes = context.peer.supported_elicitation_modes();
         if modes.is_empty() {
-            return Ok(Self::deny(
+            return Ok(Some(Self::deny(
                 "approval_unavailable",
                 "client does not support elicitation; sensitive operation denied",
                 "REQUIRE_APPROVAL",
-            ));
+            )));
         }
 
         let message = format!(
@@ -623,22 +717,20 @@ impl GuardrailServer {
 
         match context.peer.elicit::<Approval>(message).await {
             Ok(Some(a)) if a.approved => {
-                self.record_evidence(actor, action, &Decision::allow("human approved", now_secs()));
-                let label = if a.reason.is_empty() { "approved".to_string() } else { a.reason };
-                Ok(CallToolResult::success(vec![ContentBlock::text(
-                    json!({ "status": "approved", "note": label }).to_string(),
-                )]))
+                let label = if a.reason.is_empty() { "human approved".to_string() } else { a.reason };
+                self.record_evidence(actor, action, &Decision::allow(&label, now_secs()));
+                Ok(None)
             }
-            Ok(_) => Ok(Self::deny(
+            Ok(_) => Ok(Some(Self::deny(
                 "approval_denied",
                 "human rejected or did not approve the sensitive operation",
                 "REQUIRE_APPROVAL",
-            )),
-            Err(e) => Ok(Self::deny(
+            ))),
+            Err(e) => Ok(Some(Self::deny(
                 "approval_failed",
                 &format!("elicitation failed: {e}"),
                 "REQUIRE_APPROVAL",
-            )),
+            ))),
         }
     }
 
