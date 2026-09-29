@@ -1,6 +1,9 @@
 # Binary
 guardrail-mcp
 
+# Rust build output
+/target/
+
 # IDE
 .vscode/
 .idea/

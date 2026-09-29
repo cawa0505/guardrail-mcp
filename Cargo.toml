@@ -1,0 +1,7 @@
+[workspace]
+members = [
+    "crates/guardrail-core",
+    "crates/guardrail-adapter-coding",
+    "crates/guardrail-server",
+]
+resolver = "2"
