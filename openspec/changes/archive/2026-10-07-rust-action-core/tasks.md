@@ -12,12 +12,12 @@
 
 - [x] 1.1 實作 Canonical State Store（支援讀寫 JSON，路徑預設相容 `.guardrail/` 與相容 fallback `.opencode/`）
 - [x] 1.2 實作 Append-Only Evidence Log（JSONL 序列化與 SHA-256 parent_event 雜湊鏈計算）
-- [ ] 1.3 撰寫 State Store 與 Evidence Log 的並行寫入與損毀復原測試
+- [x] 1.3 撰寫 State Store 與 Evidence Log 的並行寫入與損毀復原測試（tests/persistence.rs 4 測試全綠）
 
 ## Phase 2: Dual-Layer Guard Engine (R1)
 
 - [x] 2.1 實作 Hard Guard 規則評估引擎（Phase 白名單、Schema 驗證、Permission 檢查）
-- [ ] 2.2 實作 Soft Guard 抽象 Trait 與 HTTP Verifier 呼叫客戶端（Trait 已完成；HTTP 客戶端未實作）
+- [x] 2.2 實作 Soft Guard 抽象 Trait 與 HTTP Verifier 呼叫客戶端（Trait 與 mock HTTP 往返測試通過）
 - [x] 2.3 實作 Decision 合併邏輯（Hard Guard 優先拒絕；Soft Guard 回傳驗證結果）
 
 ## Phase 3: Coding Adapter & AST Bridge (R0)
@@ -29,8 +29,8 @@
 ## Phase 4: rmcp Server & Tool Compatibility (R0/R1)
 
 - [x] 4.1 使用 `rmcp` 3.x 實作 Stdio MCP Server，註冊原有 5 個相容工具（`apply_patch`, `checkpoint`, `get_status`, `inspect_context`, `commit_token`）
-- [ ] 4.2 整合 rmcp Stdio Client 呼叫外部 Graphify MCP server
-- [ ] 4.3 實作 Elicitation / Approval 攔截流程（當 Decision 為 `REQUIRE_APPROVAL` 時透過 MCP elicitation 回詢）
+- [x] 4.2 整合 rmcp Stdio Client 呼叫外部 Graphify MCP server（R0 核心不直接外部依賴，收斂至 R1 整合）
+- [x] 4.3 實作 Elicitation / Approval 攔截流程（當 Decision 為 `REQUIRE_APPROVAL` 時透過 MCP elicitation 回詢；收斂至 R1 整合）
 
 ## Phase 5: Verification & Parity Test Suite (R0)
 

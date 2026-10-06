@@ -6,7 +6,7 @@
 
 ### Requirement: Phase state machine
 
-系統 SHALL 維護一組有限狀態機，包含 INIT / PLANNING / EXECUTING / VERIFYING / COMPLETED 五個階段。
+系統 SHALL 維護一組有限狀態機，包含 INIT / PLANNING / EXECUTING / VERIFYING / COMPLETED / FAILED / CANCELLED 七個階段。
 
 #### Scenario: 初始階段為 INIT
 
@@ -18,32 +18,47 @@
 - **WHEN** agent 依序呼叫 checkpoint 並指定 next_phase
 - **THEN** 系統依 INIT → PLANNING → EXECUTING → VERIFYING → COMPLETED 順序轉移
 
+#### Scenario: 轉移至失敗終態 FAILED
+
+- **WHEN** 任務執行遭遇不可復原錯誤，或 agent/orchestrator 指定 next_phase 為 FAILED
+- **THEN** 系統將狀態標記為 FAILED，僅允許唯讀查詢與復原轉移
+
+#### Scenario: 轉移至取消終態 CANCELLED
+
+- **WHEN** 操作者或上游工作流取消任務，指定 next_phase 為 CANCELLED
+- **THEN** 系統將狀態標記為 CANCELLED，進入終態
+
+#### Scenario: 從 FAILED 重試復原
+
+- **WHEN** agent 在 FAILED 狀態呼叫 checkpoint 並指定 next_phase 為 PLANNING
+- **THEN** 系統允許轉移至 PLANNING 階段重新開始
+
 ### Requirement: Phase transition validation
 
-系統 SHALL 驗證 Phase 轉移是否合法，不合法的轉移應被拒絕。
+系統 SHALL 驗證 Phase 轉移是否符合狀態機定義，不合法的轉移應被拒絕。
 
 #### Scenario: 非法轉移被拒絕
 
-- **WHEN** agent 嘗試從 INIT 直接跳到 VERIFYING
-- **THEN** 系統回傳 Error，列出允許的目標 Phase
+- **WHEN** agent 嘗試從 INIT 直接跳到 VERIFYING 或 COMPLETED
+- **THEN** 系統回傳 DENY 或 Error，列出允許的目標 Phase
 
 ### Requirement: Action whitelist per phase
 
-系統 SHALL 為每個 Phase 定義允許的工具白名單，非白名單工具應被阻擋。
+系統 SHALL 為每個 Phase 定義允許的 Action / 工具清單，未授權操作應被阻擋。
 
 #### Scenario: 阻擋非允許操作
 
 - **WHEN** agent 在 PLANNING 階段呼叫 apply_patch
-- **THEN** 系統回傳 Error，提示當前 Phase 與允許的操作
+- **THEN** 系統產生 DENY 裁決並阻擋執行
 
 ### Requirement: Phase gate on all tools
 
-每個 MCP tool handler SHALL 在進入業務邏輯前先檢查 Phase Gate。
+每個外部進入點 SHALL 在執行具體 Action 前先通過 Phase Gate 評估。
 
 #### Scenario: 工具入口先檢查
 
 - **WHEN** 任何工具被呼叫
-- **THEN** handler 檢查當前 phase 是否允許該工具，不允許則提前回傳 Error
+- **THEN** 系統先交由 Governance Core 評估當前 Phase 是否允許該 Action，未通過則提早終止
 
 ## Phase 對照表
 
