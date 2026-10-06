@@ -1,0 +1,4 @@
+schema: spec-driven
+skip_specs: true
+created: 2026-09-20
+goal: 建立 Guardrail MCP Rust 工作區骨架、核心 crates 與基本構建驗證
