@@ -2,7 +2,7 @@
 
 定義 GuardrailMcp 的產品命名、責任邊界、雙軌驗證行為，以及 Graphify 的 current/future 定位。確保架構文件與產品事實一致，不誇大現況。
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: 產品命名邊界
 

@@ -65,5 +65,5 @@
 
 - [x] 8.1 `go build ./...` 編譯通過
 - [x] 8.2 `go test ./...` 測試通過
-- [ ] 8.3 雙軌驗證整合 E2E 測試
+- [x] 8.3 雙軌驗證整合 E2E 測試（SoftGuard 本地規則審查 + Themis 簽章/HTTP roundtrip 驗證測試全綠）
 - [x] 8.4 commit + push
